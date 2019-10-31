@@ -1,0 +1,338 @@
+const express = require('express');
+const mysql = require('mysql');
+const app = express();
+const bodyparser = require('body-parser');
+const passport = require('passport')
+const path = require('path')
+app.use(bodyparser.json());
+const cors = require('cors');
+app.use(cors())
+app.use(passport.initialize());
+app.use(passport.session());
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+//Create Connection
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'inventory_management_system',
+    //secret: 'yoursecret',
+    multipleStatements: true
+
+});
+
+const secret = "yoursecret";
+module.exports= { secret };
+
+
+
+
+
+//Connect
+db.connect((err) => {
+    if(err){
+        console.log('db connection failed \n Error:' +JSON.stringify(err));
+    }
+    console.log('MySql Connected...');
+});
+const mysqlConnection = db;
+
+//Register New User
+app.post('/createUser', (req,res)=>{
+    firstname= req.body.firstname;
+    lastname= req.body.lastname;
+    username= req.body.username;
+    password= req.body.password;
+    email= req.body.email;
+    //role= req.body.role;
+    phonenumber= req.body.phonenumber;
+    
+    if (firstname && lastname && username && password && email && phonenumber){
+        bcrypt.genSalt(10, (err,salt)=> {
+            bcrypt.hash(password, salt, (err,hash) => {
+               // console.log(hash)
+                if (err) throw err;
+                password=hash;
+               console.log("password hashed" + password)
+        //check if email already eixts
+
+        mysqlConnection.query('SELECT * from credential WHERE UserName=? or Email=?', [username,email], function(error,results,fields){
+            if (results.length > 0){
+                res.status(400)
+                res.json({
+                    success:false,
+                    message:"User already exists"
+                });
+                //res.send("user already exists")
+                res.end()
+            }else
+            {
+                mysqlConnection.query("insert into user (FirstName, LastName, UserName, Email, PhoneNumber) values ('"+firstname+"','"+lastname+"', '"+username+"', '"+email+"', '"+phonenumber+"')", (err)=>{
+                    //console.log(firstname);
+                    if (!err){
+                        res.status(201);
+                    }
+                    else
+                       console.log(err);
+                });
+                // roleId = mysqlConnection.query('select Role_Id from role where Role_Name=?', [role], function(error, results){
+                //     if (!error){
+                //         roleId=results[0].Role_Id;
+                //         mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values (LAST_INSERT_ID(), '"+roleId+"')", (err)=>{
+                //             //console.log(firstname);
+                //             if (!err){
+                //                 res.status(201);
+                //             }
+                //             else
+                //                console.log(err);
+                //         });
+                //     }
+                // })
+                
+                mysqlConnection.query("insert into credential (UserName, Password, Email) values ('"+username+"','"+password+"', '"+email+"')", (err)=>{
+                   console.log("db pass" + password);
+                    if (!err){
+                        res.status(201)
+                        res.send("user created")
+                        res.end()
+
+                    }
+                    else
+                        console.log(err);
+                });
+            }
+        })
+        })
+    });
+
+    } else{
+        res.json({
+            success:false,
+            message:"Enter correct register details"
+        })
+    }
+});
+// check for the roles
+app.put('/user/role', (req,res)=>{
+    
+})
+roleId = mysqlConnection.query('select Role_Id from role where Role_Name=?', [role], function(error, results){
+    if (!error){
+        roleId=results[0].Role_Id;
+        mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values (LAST_INSERT_ID(), '"+roleId+"')", (err)=>{
+            //console.log(firstname);
+            if (!err){
+                res.status(201);
+            }
+            else
+               console.log(err);
+        });
+    }
+})
+
+
+app.post('/login', (req,res)=>{
+  const username= req.body.username;
+    const password = req.body.password;
+    
+    if(username && password){
+        mysqlConnection.query('SELECT * from credential Where username=?', [username], function(error,results,fields){
+            if (results.length >0){
+                let db_password = mysqlConnection.query('SELECT Password from credential WHERE username=?', [username], function(error,results,row){
+                    if (results.length > 0){
+                        console.log(results[0].Password);
+                        db_password=results[0].Password;
+                        res.status(200)
+                        comparepassword(password, db_password, (err, isMatch) =>{
+                            if (err) throw err;
+                            console.log(isMatch)
+                            if (isMatch) {
+                                // get data of the user
+                                let roles = [];
+                                let result= mysqlConnection.query('Select * from user Where Username=?', [username], function(error,results,fields){
+                                    if (results.length > 0){
+                                        // convert user to json
+                                        const data = JSON.parse(JSON.stringify(results));
+                                        let result = mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.username=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [username], function(error,results,fields){
+                                            if (results.length>0){
+                                                Object.keys(results).forEach(function(key) {
+                                                    var row = results[key];
+                                                    console.log(row.Role)
+                                                    roles.push(row.Role)
+                                                  });
+                                                  // add property roles to the user object
+                                                  data[0].Roles=roles;
+                                                    //json token
+                                                    const token = jwt.sign({
+                                                        data
+                                                    },
+                                                    secret, {
+                                                        expiresIn: 604800 //one week in miliseconds
+                                                    }
+                                                    );
+                                                    return res.json({
+                                                        success:true,
+                                                        
+                                                        token:"JWT " + token,
+                                                        roleId:data[0].Roles
+                                                    });
+                                            }
+                                        });
+                                        
+                                        
+                                    }
+                                })
+                           
+                            }else{
+                                return res.json({
+                                    success: false,
+                                    message: "Wrong Username or Password"
+                                })
+                            }
+                        })
+                        
+                    }
+                });
+            }else{
+                res.status(401)
+                res.json({
+                    success:false,
+                    message:"Incorrect login details"
+                })
+                
+            }
+        })
+    }else{
+        res.status(401)
+        res.json({
+            success:false,
+            message:"Enter the correct details"
+        });
+        
+    }
+
+    //bcrypt function
+    function comparepassword(password, hash, callback){
+        console.log('ordi pass ' + password)
+        console.log('db pass ' + hash)
+        bcrypt.compare(password, hash, (err, isMatch)=>{
+            if (err) throw err
+            callback(null, isMatch)
+            
+        })
+    }
+})
+
+
+
+
+// bring in the passport authentication strategy
+require('./passport')(passport);
+
+// VIEW USER BY ID, VIEW USER PROFILE
+
+app.get('/viewUser/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    console.log(req.user)
+    id= req.params.id;
+    mysqlConnection.query('Select * from user Where Staff_Id=?', [id], function(error,results,fields){
+        if (results.length > 0){
+            const data = JSON.parse(JSON.stringify(results));
+            mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
+                if (results.length>0){
+                    Object.keys(results).forEach(function(key) {
+                        var row = results[key];
+                        console.log(row.Role)
+                        roles.push(row.Role)
+                    });
+                      // add property roles to the user object
+                    data[0].Roles=roles;
+                    res.status(200);
+                    return res.json({
+                        success:true,
+                        data   
+                    });
+                }else{
+                    res.status(400);
+                }
+            });
+            
+            
+        }else{
+            res.status(400);
+        }
+    });
+
+
+})
+//vIEW USERS
+app.get('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    console.log(req.user)
+    id= req.params.id;
+    mysqlConnection.query('select * from user u, role r, user_role s where r.role_id=s.role_id and s.staff_id=u.staff_id',  function(error,results,fields){
+        if (results.length > 0){
+            const data = JSON.parse(JSON.stringify(results));
+            return res.json({
+                success:true,
+                data   
+            });
+            // mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
+            //     if (results.length>0){
+            //         Object.keys(results).forEach(function(key) {
+            //             var row = results[key];
+            //             console.log(row.Role)
+            //             roles.push(row.Role)
+            //         });
+            //           // add property roles to the user object
+            //         data[0].Roles=roles;
+            //         res.status(200);
+            //         return res.json({
+            //             success:true,
+            //             data   
+            //         });
+            //     }else{
+            //         res.status(400);
+            //     }
+            // });
+            
+            
+        }else{
+            res.status(400);
+        }
+    });
+
+
+});
+
+
+//  Update Users
+app.put('/User/update', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id = req.body.staff_id;
+    firstname= req.body.firstname;
+    lastname= req.body.lastname;
+    email= req.body.email;
+    role= req.body.role;
+    phonenumber= req.body.phonenumber;
+    
+    if (firstname && lastname && email && role && phonenumber){
+        mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=? where Staff_Id=?', [firstname, lastname, email, phonenumber, id], (err)=>{
+            //console.log(firstname);
+            if (!err){
+                res.status(201);
+            }
+            else
+                console.log(err);
+        });
+
+    }else{
+        res.json({
+            success:false,
+            message:"supply correct details"
+        })
+    }
+})
+
+
+app.listen('8000', () => {
+    console.log('Server started on port 3000');
+})
