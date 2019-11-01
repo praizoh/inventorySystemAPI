@@ -863,6 +863,7 @@ async function updateEvent(id){
     }
     
 }
+
 async function getEventById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -883,7 +884,7 @@ async function getItemById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select * from events where item_id=?', [id]);
+        const result =await connection.execute('select * from events where is_leaf=1 and item_id=?', [id]);
         console.log(result[0])
         let data= result
         return data
@@ -901,8 +902,8 @@ async function getItemByName(itemName){
     try {
         const result =await connection.execute('select * from item where item_Name=?', [itemName]);
         //console.log(JSON.stringify(result[0][0].Item_Id))
-        console.log("asset id")
-        console.log(JSON.stringify(result[0]))
+        console.log(result)
+        //console.log(JSON.stringify(result[0]))
         let data= result
         return data
 
@@ -917,7 +918,7 @@ async function getAllItems(){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select * from item');
+        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id');
         let data= result
         return data
 
@@ -1128,7 +1129,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
         })
         getItemByName(itemName)
         .then(data => {
-            if (data.length>0){
+            if (data[0].length>0){
                 console.log("item already exists")
                 id= JSON.stringify(data[0][0].Item_Id)
                 event.item_id= id;
