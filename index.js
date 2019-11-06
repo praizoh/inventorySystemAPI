@@ -60,7 +60,6 @@ app.post('/User', (req,res)=>{
             {   
                 const randomstring = Math.random().toString(36).slice(-8);
                 password= randomstring;
-                //console.log(password);
                 bcrypt.genSalt(10, (err,salt)=> {
                     bcrypt.hash(password, salt, (err,hash) => {
                         if (err) throw err;
@@ -427,7 +426,7 @@ app.get('/count/Users', (req,res)=>{
 })
 
 //----------------------------------------UPDATE USERS------------------------------------------------------------------//
-app.put('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
+app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
     id = req.body.staff_id;
     username=req.body.username;
     firstname= req.body.firstname;
@@ -482,7 +481,7 @@ app.put('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
                 } 
                 console.log("user roles added")
         
-                res.status(201);
+                res.status(200);
                 res.json({
                     success:true,
                     message:"user updated"
@@ -495,6 +494,7 @@ app.put('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
         });
         
     }else{
+        res.status(400)
         res.json({
             success:false,
             message:"supply correct details"
@@ -804,6 +804,22 @@ async function createCategory(category){
         } 
     
 }
+async function createItem_Category(item_id, category_id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{ 
+        const result = await connection.execute("insert into item_category (item_id, category_id) values ('"+item_id+"','"+category_id+"')")
+        console.log("category_item inserted")
+        console.log(result[0].insertId)
+        data= result[0]
+        return data
+    }catch (err) {
+          
+        console.log(err)
+        return err
+        } 
+    
+}
 async function getCategoryByName(name){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -819,7 +835,7 @@ async function getCategoryByName(name){
         return err
     } 
 }
-async function getAllCategory(name){
+async function getAllCategory(){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
@@ -836,10 +852,13 @@ async function getAllCategory(name){
 }
 
 async function createEvent(event){
+    if (!event.requestId){
+        event.requestId=0
+    }
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
-        const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"')")
+        const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"')")
         console.log(result)
         data=result[0]
         return data
@@ -850,6 +869,36 @@ async function createEvent(event){
     
 }
 
+async function createRequest(username,assetId,comment,quantity){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result= await connection.execute("insert into request(asset_id, staff_id, comment, quantity, staff_username, location) values ('"+assetId+"', '"+staffId+"', '"+comment+"', '"+quantity+"', '"+username+"', '"+location+"')")
+        console.log(result)
+        data=result[0]
+        return data
+    }catch (err){
+        console.log(err)
+        return err
+    }
+    
+}
+
+async function staffAsset(staff_name){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('select * from events where assigned_to=? and is_Leaf=1', [staff_name]);
+        console.log(result[0])
+        let data= result
+        return data
+
+    } catch (err) {
+          
+        console.log(err)
+        return err
+    }
+}
 async function updateEvent(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -858,6 +907,22 @@ async function updateEvent(id){
         console.log("update heere")
         console.log(result)
         return result
+    }catch (err){
+        return err
+    }
+    
+}
+
+async function updateRequest(id,status){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        //const result = await connection.execute('update events SET is_leaf=? where requestId=?',[0,id])
+        let data = await connection.execute('update request SET request_status=? where id=?',[status,id])
+        console.log("update request")
+        console.log(result)
+        data="success"
+        return data
     }catch (err){
         return err
     }
@@ -884,7 +949,7 @@ async function getItemById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select * from events where is_leaf=1 and item_id=?', [id]);
+        const result =await connection.execute('select * from events e, item t where e.is_leaf=1 and e.item_id=t.item_id and e.item_id=?', [id]);
         console.log(result[0])
         let data= result
         return data
@@ -914,11 +979,11 @@ async function getItemByName(itemName){
         } 
 }
 
-async function getAllItems(){
+async function getAllItems(limit){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id');
+        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id limit ?', [limit]);
         let data= result
         return data
 
@@ -1022,6 +1087,22 @@ async function assignEvent(event, username){
     }
 }
 
+async function getEventRequestById(id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('select id from events where requestId=?', [id]);
+        console.log(result[0])
+        let data= result
+        return data
+
+      } catch (err) {
+          
+        console.log(err)
+        return err
+    } 
+}
+
 
 
 //------------------------------------------------Get Asset ById------------------------------------------------------//
@@ -1056,7 +1137,14 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
 })
 //------------------------------------Get All Asset------------------------------------------------------------------//
 app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    getAllItems()
+    let limit=req.query.limit;
+    if (limit){
+        limit=parseInt(limit)
+        console.log(limit)
+    }else{
+        limit=5;
+    }  
+    getAllItems(limit)
     .then(data=>{
         if (data.length>0){
             let items = JSON.parse(JSON.stringify(data[0]));
@@ -1070,7 +1158,7 @@ app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
             res.status(400)
             res.json({
                 success:false,
-                message:"Could not fetch users"
+                message:"Could not fetch items"
             })
         }
     })
@@ -1088,6 +1176,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     status=req.body.status
     category=req.body.category
     comment=req.body.comment
+    is_category=req.query.is_category
     if (comment==""){
         comment="no comment"
     }else{
@@ -1108,25 +1197,11 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
         event.parent_id="Parent Node"
         event.subDesc=itemDesc
         item={}
+        
         item.itemDesc=itemDesc
         item.itemName=itemName
-
-        getCategoryByName(category)
-        .then(data=>{
-            if (data[0].length>0){
-                console.log("Category exists")
-
-            }else{
-                createCategory(category)
-                .then(data=>{
-                    if (data.insertId){
-                        console.log("category created")
-                    }else{
-                        console.log("category not created")
-                    }
-                });
-            }
-        })
+        item_cat=[]
+        
         getItemByName(itemName)
         .then(data => {
             if (data[0].length>0){
@@ -1154,6 +1229,40 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                 .then(data => {
                     if (data.insertId){
                         event.item_id=data.insertId
+                    //add category and insert category_item
+                        for (let j=0; j<category.length; j++){
+                            console.log(category[j])
+                            getCategoryByName(category[j])
+                            .then(data=>{
+                                if (data[0].length>0){
+                                    console.log("Category exists")
+
+                                }else{
+                                    createCategory(category[j])
+                                    .then(data=>{
+                                        if (data.insertId){
+                                            cat_id=data.insertId
+                                            console.log('we herererrer')
+                                            createItem_Category(event.item_id, cat_id)
+                                            .then(data=>{
+                                                if (data.insertId){
+                                                    console.log("category_item created")
+                                                }else{
+                                                    console.log("category_item not created")
+                                                }
+                                            });
+                                            
+                                            item_cat.push(data.insertId)
+                                            console.log("category created")
+                                            console.log(item_cat)
+                                        }else{
+                                            console.log("category not created")
+                                        }
+                                    });
+                                }
+                            })
+                        }
+                       
                         createEvent(event)
                         .then(data => {
                             if (data.insertId){
@@ -1188,13 +1297,16 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
 })
 //------------------------------------------Assign Asset----------------------------------------------------------------//
 app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    requestStatus=req.body.requestStatus
+    requestId=req.body.requestId;
+    if (requestStatus=="ACCEPTED" && requestId){
     eventId= req.body.event_id;
     assQty= req.body.assign_quantity;
     itemId=req.params.id
     assLocation = req.body.location
     username=req.body.staff_username
-    status= req.boy.status
-    category=req.boy.category
+    status= req.body.status
+    category=req.body.category
     comment=req.body.comment
     event={}
     //if (eventId && assQty && itemId && assLocation && username && status && category && )
@@ -1218,6 +1330,17 @@ app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)
                         assignEvent(assign,username)
                         .then(data=>{
                             if (data=="success"){
+                                updateRequest(requestId,requestStatus)
+                                .then(data=>{
+                                    if (data=="success"){
+                                        console.log("Request updated")
+                                        
+                                    }else{
+                                        console.log("Request not updated")
+                                    
+                                    }
+                                    
+                                })
                                 res.status(200)
                                 res.json({
                                     success:true,
@@ -1243,7 +1366,150 @@ app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)
         })
     }
     
+    }else{
+        
+       if (requestStatus=="NOT GRANTED" && requestId){
+            updateRequest(requestId,requestStatus)
+            .then(data=>{
+                if (data=="success"){
+                    res.status(200)
+                    res.json({
+                        success:true,
+                        message:"Request updated"
+                    })
+                }else{
+                    res.status(400)
+                    res.json({
+                        success:false,
+                        message:"Request not updated"
+                    })
+                }
+                
+            })
+        }else{
+            res.status(401)
+            res.json({
+                success:false,
+                message:"Enter correct details"
+            })
+            res.end()
+        }
+    }
+    
 
 })
 //------------------------------------------Update Asset----------------------------------------------------------------//
-//app.post()
+app.get('/Staff/Asset', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    console.log("here")
+    staffName=req.body.staffName;
+    console.log(staffName)
+    if (staffName){
+        staffAsset(staffName)
+        .then(data=>{
+            if (data.length>0){
+                let item = JSON.parse(JSON.stringify(data[0]));
+                res.status(200)
+                res.json({
+                    success:true,
+                    item
+                })
+            }else{
+                res.status(400)
+                res.json({
+                    success:false,
+                    message:"User not found"
+                })
+            }
+        })
+    }else{
+        res.status(400)
+        res.json({
+            success:false,
+            message:"Enter Correct details"
+        })
+    }
+    
+})
+
+//count assets
+app.get('/count/Assets', (req,res)=>{
+    mysqlConnection.query('SELECT SUM(quantity) AS NumberOfAssets FROM events where is_leaf=1', function(error, results){
+        if (!error){
+            const data = JSON.parse(JSON.stringify(results));
+            res.status(200)
+            res.json({
+            success:true,
+            data
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message: 'Could not return number of assets at this time'
+            })
+        }
+    })
+})
+
+//-------------------------------------------GET CATEGORIES--------------------------------------------------------------\\
+app.get('/category', (req,res)=>{
+    getAllCategory()
+    .then(data=>{
+        if (data.length>0){
+            let categories = JSON.parse(JSON.stringify(data[0]));
+            res.status(200),
+            res.json({
+                success:true,
+                categories
+                
+            })
+        }else{
+            res.status(400)
+            res.json({
+                success:false,
+                message:"Could not fetch categories"
+            })
+        }
+    })
+})
+
+//----------------------------------REQUEST------------------------------------------------------------------------------//
+app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    requested_by=req.body.staffUsername
+    comment=req.body.comment
+    items=req.boy.items
+    for (let j=0; j<items.length; j++){
+        item_id=items[j].itemId
+        req_quantity=items[j].quantity
+
+        if(requested_by && item_id && quantity){
+            if (!comment){
+                comment="no comment"
+            }
+            createRequest(requested_by,item_id,comment,req_quantity)
+            .then(data=>{
+                if (data.insertId){
+                    res.status(201)
+                    res.json({
+                        success:true,
+                        message:'request made'
+                    })
+                }else{
+                    res.status(400)
+                    res.json({
+                        success:false,
+                        message:'request not made'
+                    })
+                }
+            })
+        }else{
+            res.status(400)
+            res.json({
+                success:false,
+                message:"Enter the correct details"
+            })
+        }
+    }
+
+})                  
+
