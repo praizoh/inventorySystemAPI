@@ -316,7 +316,7 @@ app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
 })
 
 //the url below activates or deactivates a user
-app.put('/status/Users/', passport.authenticate('jwt', {session:false}), (req,res)=>{
+app.put('/status/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
     isActive = req.body.isActive;
     id= req.body.staff_id
     console.log(isActive)
@@ -869,21 +869,6 @@ async function createEvent(event){
     
 }
 
-async function createRequest(username,assetId,comment,quantity){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{
-        const result= await connection.execute("insert into request(asset_id, staff_id, comment, quantity, staff_username, location) values ('"+assetId+"', '"+staffId+"', '"+comment+"', '"+quantity+"', '"+username+"', '"+location+"')")
-        console.log(result)
-        data=result[0]
-        return data
-    }catch (err){
-        console.log(err)
-        return err
-    }
-    
-}
-
 async function staffAsset(staff_name){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -983,12 +968,11 @@ async function getAllItems(limit){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id limit ?', [limit]);
+        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id order by item.Date_Created DESC limit ?', [limit]);
         let data= result
         return data
 
       } catch (err) {
-          
         console.log(err)
         return err
         } 
@@ -1087,11 +1071,89 @@ async function assignEvent(event, username){
     }
 }
 
-async function getEventRequestById(id){
+async function getRequestById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select id from events where requestId=?', [id]);
+        const result =await connection.execute('select * from request r, item_request i  where r.id=i.request_id and r.id=?', [id]);
+        console.log(result[0])
+        let data= result
+        return data
+
+      } catch (err) {
+          
+        console.log(err)
+        return err
+    } 
+}
+async function getAllRequest(limit){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('SELECT * from request limit ?', [limit]);
+        let data= result
+        return data
+
+      } catch (err) {
+          
+        console.log(err)
+        return err
+        } 
+}
+async function createRequest(username,comment){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result= await connection.execute("insert into request(requested_by,comment) values ('"+username+"', '"+comment+"')");
+                data=result[0]
+                return data
+           
+        
+    }catch (err){
+        console.log(err)
+        return err
+    }
+    
+}   
+async function createitemRequest(requestId,itemId,quantity){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result= await connection.execute("insert into item_request(item_id,qty_requested,request_id) values ('"+itemId+"', '"+quantity+"', '"+requestId+"')");
+        
+               console.log(result)
+                data=result[0]
+                return data
+           
+        
+    }catch (err){
+        console.log(err)
+        return err
+    }
+    
+}   
+async function createLotSerialNumbers(lotId, serialNum){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result= await connection.execute("insert into item_serialn(lotId,serialNumber) values ('"+lotId+"', '"+serialNum+"')");
+        
+               console.log(result)
+                data=result[0]
+                return data
+           
+        
+    }catch (err){
+        console.log(err)
+        return err
+    }
+    
+}   
+async function getlotSerialNumber(id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('select * from item_serialn where lotId=?', [id]);
         console.log(result[0])
         let data= result
         return data
@@ -1108,16 +1170,32 @@ async function getEventRequestById(id){
 //------------------------------------------------Get Asset ById------------------------------------------------------//
 app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
     id=req.params.id;
-    if (id){
+    lot={}
+    if (id){    
         getItemById(id)
         .then(data=>{
             if (data.length>0){
-                let item = JSON.parse(JSON.stringify(data[0]));
+                item = JSON.parse(JSON.stringify(data[0]));
+                for (let k=0; k<item.length; k++){
+                    getlotSerialNumber(item[k].id)
+                    .then(data=>{
+                        if (data.length>0){
+                            let serialNumber=JSON.parse(JSON.stringify(data[0]));
+                            item[k].serialNumbers=serialNumber
+                            
+                            name="Lot "+k
+                            lot.name=item[k]
+                            console.log(item[k])
+                        }
+                    })
+                }
                 res.status(200)
                 res.json({
                     success:true,
-                    item
+                    lot
                 })
+               
+                
             }else{
                 res.status(400)
                 res.json({
@@ -1142,7 +1220,7 @@ app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
         limit=parseInt(limit)
         console.log(limit)
     }else{
-        limit=5;
+        limit=10;
     }  
     getAllItems(limit)
     .then(data=>{
@@ -1177,6 +1255,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     category=req.body.category
     comment=req.body.comment
     is_category=req.query.is_category
+    serialNumber=req.body.serialNumber
     if (comment==""){
         comment="no comment"
     }else{
@@ -1212,6 +1291,17 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                 createEvent(event)
                 .then(data => {
                 if (data.insertId){
+                    lotId=data.insertId
+                    for (let k=0; k<serialNumber.length; k++){
+                        createLotSerialNumbers(lotId,serialNumber[k])
+                        .then(data=>{
+                            if (data.insertId){
+                                console.log("Lots serial number created")
+                            }else{
+                                console.log("Lots serial number not created")
+                            }
+                        })
+                    }
                     res.json({
                         success:true,
                         message:"Item created"
@@ -1266,6 +1356,17 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                         createEvent(event)
                         .then(data => {
                             if (data.insertId){
+                                lotId=data.insertId
+                                for (let k=0; k<serialNumber.length; k++){
+                                    createLotSerialNumbers(lotId,serialNumber[k])
+                                    .then(data=>{
+                                        if (data.insertId){
+                                            console.log("Lots serial number created")
+                                        }else{
+                                            console.log("Lots serial number not created")
+                                        }
+                                    })
+                                }
                                 res.json({
                                     success:true,
                                     message:"Item created"
@@ -1477,39 +1578,118 @@ app.get('/category', (req,res)=>{
 app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requested_by=req.body.staffUsername
     comment=req.body.comment
-    items=req.boy.items
-    for (let j=0; j<items.length; j++){
-        item_id=items[j].itemId
-        req_quantity=items[j].quantity
-
-        if(requested_by && item_id && quantity){
-            if (!comment){
-                comment="no comment"
-            }
-            createRequest(requested_by,item_id,comment,req_quantity)
-            .then(data=>{
-                if (data.insertId){
-                    res.status(201)
-                    res.json({
-                        success:true,
-                        message:'request made'
+    items=req.body.items
+    console.log(items)
+    createRequest(requested_by,comment)
+    .then(data=>{
+        if (data.insertId){
+            requestId=data.insertId
+            for (let j=0; j<items.length; j++){
+                item_id=items[j].itemId
+                req_quantity=items[j].quantity
+        
+                if(requested_by && item_id && req_quantity){
+                    if (!comment){
+                        comment="no comment"
+                    }
+                    createitemRequest(requestId,item_id,req_quantity)
+                    .then(data=>{
+                        if (data.insertId){
+                            console.log('Request inserted')
+                        }else{
+                            console.log('request not inserted')
+                        }
                     })
                 }else{
                     res.status(400)
                     res.json({
                         success:false,
-                        message:'request not made'
+                        message:"Enter the correct details"
                     })
+                    res.end()
                 }
+            }
+        
+            res.status(200)
+            res.json({
+                success:true,
+                message:"Request Made"
             })
         }else{
             res.status(400)
             res.json({
                 success:false,
-                message:"Enter the correct details"
+                message:"request not inserted"
             })
         }
-    }
+    })
 
-})                  
+})      
+
+app.get('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    limit=req.query.limit
+    if (!limit){
+        limit=5;
+    }
+    getAllRequest(limit)
+    .then(data=>{
+        if (data.length>0){
+            let requests = JSON.parse(JSON.stringify(data[0]));
+            res.status(200)
+            res.json({
+                success:true,
+                requests
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"could not fetch request data"
+            })
+
+        }
+    })
+})
+
+app.get('/request/:id',passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id=req.params.id;
+    getRequestById(id)
+    .then(data=>{
+        if (data.length>0){
+            let requests = JSON.parse(JSON.stringify(data[0]));
+            res.status(200)
+            res.json({
+                success:true,
+                requests
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"could not fetch request data"
+            })
+
+        }
+    })
+})
+
+app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id=req.params.id;
+    mysqlConnection.query('SELECT COUNT(requested_by) AS NumberOfRequest FROM request where requested_by=?',[id], function(error, results){
+        if (!error){
+            const data = JSON.parse(JSON.stringify(results));
+            res.status(200)
+            res.json({
+            success:true,
+            data
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message: 'Could not return number of users at this time'
+            })
+        }
+    })  
+})
 
