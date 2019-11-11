@@ -68,7 +68,7 @@ app.post('/User', (req,res)=>{
                         mysqlConnection.query("insert into user (FirstName, LastName, UserName, Email, PhoneNumber) values ('"+firstname+"','"+lastname+"', '"+username+"', '"+email+"', '"+phonenumber+"')", (err, results)=>{
                            
                             if (!err){
-                                res.status(201);
+                                
                                 const lastId = results.insertId;
                                 console.log(lastId + "1")
 
@@ -133,6 +133,7 @@ app.post('/User', (req,res)=>{
                                         return console.log(error);
                                     }
                                     console.log('Message %s sent: %s', info.messageId, info.response);
+                                    res.status(201);
                                     res.json({
                                         sucess:true,
                                         message:"User password updated",
@@ -160,7 +161,7 @@ app.post('/User', (req,res)=>{
         })
 
     } else{
-        res.status(400);
+        res.status(401);
         res.json({
             success:false,
             message:"Enter correct register details"
@@ -181,7 +182,7 @@ app.post('/login', (req,res)=>{
                     if (results.length > 0){
                         console.log(results[0].Password);
                         db_password=results[0].Password;
-                        res.status(200)
+                        //res.status(200)
                         comparepassword(password, db_password, (err, isMatch) =>{
                             if (err) throw err;
                             console.log(isMatch)
@@ -210,6 +211,7 @@ app.post('/login', (req,res)=>{
                                                         expiresIn: 604800 //one week in miliseconds
                                                     }
                                                     );
+                                                    res.status(200)
                                                     return res.json({
                                                         success:true,
                                                         
@@ -303,12 +305,14 @@ app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
                     });
                 }else{
                     res.status(400);
+                    res.json("User not found")
                 }
             });
             
             
         }else{
-            res.status(400);
+            res.status(401);
+            res.json("User details not correct")
         }
     });
 
@@ -316,30 +320,39 @@ app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
 })
 
 //the url below activates or deactivates a user
-app.put('/status/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    isActive = req.body.isActive;
-    id= req.body.staff_id
-    console.log(isActive)
+app.put('/status/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id= req.params.staffId
     console.log(id)
-    if (id && isActive){
-        mysqlConnection.query('Update user SET isActive=? where staff_id=?', [0, id], (err)=>{
-            if (!err){
-                res.status(200)
-                res.json({
-                    success:true,
-                    message:"User status updated successfully"
+    if (id){
+        mysqlConnection.query('Select isActive from user where staff_id=?', [id], function(err,results,fields){
+            console.log(results)
+            if (results.length > 0){
+                isActive=results[0].isActive
+                newIsActive=!isActive
+                mysqlConnection.query('Update user SET isActive=? where staff_id=?', [newIsActive, id], (err)=>{
+                    if (!err){
+                        res.status(200)
+                        res.json({
+                            success:true,
+                            message:"User status updated successfully"
+                        })
+                    }else{
+                        console.log(err)
+                        res.status(400)
+                        res.json({
+                            success:false,
+                            message:"User status not successfully updated"
+                        })
+                    }
                 })
             }else{
-                console.log(err)
-                res.status(400)
-                res.json({
-                    success:false,
-                    message:"User status not successfully updated"
-                })
+                res.status(401)
+                res.json("User not found")
             }
         })
+       
     }else{
-        res.status(400)
+        res.status(409)
         res.json({
             success:false,
             message:"Enter correct details"
@@ -432,7 +445,7 @@ app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
     firstname= req.body.firstname;
     lastname= req.body.lastname;
     email= req.body.email;
-    role= req.body.roles;
+    role= req.body.roles; 
     phonenumber= req.body.phonenumber;
     
     if (firstname && lastname && email && phonenumber && role && id && username){
@@ -577,20 +590,17 @@ app.put('/forgotPassword', (req,res)=>{
                                console.log('User Password Updated')
                                 //--------------------------send email----------------------------------------------------------------
                                 let transport = nodemailer.createTransport({
-                                    host: 'smtp.mailtrap.io',
-                                    port: 25,
-                                    secure: false,
-                                    
+                                    service: 'gmail',
                                     auth: {
                                         // should be replaced with real sender's account
-                                        user: '90d97788acb6ef',
-                                        pass: 'e9fe5491a68bc7'
+                                        user: 'oremei.akande@gmail.com',
+                                        pass: 'oremei@akande'
                                     }
                                 });
                                 let mailOptions = {
                                     // should be replaced with real  recipient's account
                                     from: 'noreplyKayar@gmail.com',
-                                    to: 'oremei.akande@gmail.com',
+                                    to: 'sumbomatic@gmail.com',
                                     subject: 'Password Reset',
                                     text: 'You are receiving this message because you put in for a password reset. With this message is a temporary password. Login in to the site with it and reset your  password afterwards. Your temporary password is  ' + randomstring
                                 };
@@ -601,14 +611,14 @@ app.put('/forgotPassword', (req,res)=>{
                                     console.log('Message %s sent: %s', info.messageId, info.response);
                                     res.json({
                                         sucess:true,
-                                        message:"User password updated",
+                                        message:"User password updated. Check your mail for password",
                                         data:randomstring
                                     })
                                     res.end()
                                 });
                                
                            }else{
-                               res.status(401)
+                               res.status(400)
                                 res.json({
                                     sucess:false,
                                     message:"Password not updated"
@@ -667,7 +677,7 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
                                                })
                                                res.end()
                                            }else{
-                                               res.status(401)
+                                               res.status(400)
                                                 res.json({
                                                     sucess:false,
                                                     message:"Password not updated"
@@ -678,6 +688,7 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
                                     })
                                 });
                             }else{
+                                res.status(409)
                                 res.json({
                                     success:false,
                                     message:"old password does not match"
@@ -724,8 +735,8 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
 })
 
 //----------------------------------------------------GET ROLE BY ID-----------------------------------------------------
-app.get('/role/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    id=req.params.id;
+app.get('/role/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id=req.params.staffId;
     roles=[]
     if (id){
         mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
@@ -751,7 +762,7 @@ app.get('/role/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
             }
         });
     }else{
-        res.status(400);
+        res.status(409);
             return res.json({
                 success:false,
                 message:"roles not found"   
@@ -933,11 +944,27 @@ async function getEventById(id){
 async function getItemById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    const lot=[]
     try {
         const result =await connection.execute('select * from events e, item t where e.is_leaf=1 and e.item_id=t.item_id and e.item_id=?', [id]);
         console.log(result[0])
         let data= result
-        return data
+        if (data.length>0){
+            item = JSON.parse(JSON.stringify(data[0]));
+            for (let k=0; k<item.length; k++){
+                await getlotSerialNumber(item[k].id)
+                .then(data=>{
+                    if (data.length>0){
+                        let serialNumber=JSON.parse(JSON.stringify(data[0]));
+                        item[k].serialNumbers=serialNumber
+                        lot.push(item[k])
+                    }
+                })
+            }
+        }
+        console.log("printing lot")
+        console.log(lot)
+        return lot
 
       } catch (err) {
           
@@ -1173,22 +1200,8 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
     lot={}
     if (id){    
         getItemById(id)
-        .then(data=>{
-            if (data.length>0){
-                item = JSON.parse(JSON.stringify(data[0]));
-                for (let k=0; k<item.length; k++){
-                    getlotSerialNumber(item[k].id)
-                    .then(data=>{
-                        if (data.length>0){
-                            let serialNumber=JSON.parse(JSON.stringify(data[0]));
-                            item[k].serialNumbers=serialNumber
-                            
-                            name="Lot "+k
-                            lot.name=item[k]
-                            console.log(item[k])
-                        }
-                    })
-                }
+        .then(lot=>{
+            if (lot.length>0){
                 res.status(200)
                 res.json({
                     success:true,
@@ -1200,7 +1213,7 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
                 res.status(400)
                 res.json({
                     success:false,
-                    message:"User not found"
+                    message:"Asset not found"
                 })
             }
         })
