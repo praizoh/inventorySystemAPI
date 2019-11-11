@@ -505,11 +505,11 @@ app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
 
 //-----------------------------------------------  HANDLING ROLES ------------------------------------------------------//
 app.post('/roles', passport.authenticate('jwt', {session:false}), (req,res)=>{
-staffId= req.body.staff_id;
-role=req.body.roles;
-console.log(staffId)
-console.log(role);
-if (role && staffId){
+    staffId= req.body.staff_id;
+    role=req.body.roles;
+    console.log(staffId)
+    console.log(role);
+    if (role && staffId){
     mysqlConnection.query('Delete from user_role where Staff_Id=?', [staffId], (err)=>{
         if (!err){
             console.log("Deleted roles successfully")
