@@ -651,6 +651,7 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
     username=req.body.username;
     oldPassword=req.body.oldPassword;
     password= req.body.newPassword;
+    randomstring=password
     if (username && password){
         mysqlConnection.query('select * from credential where UserName=?',[username], (err,results)=>{
             if (results.length>0){
@@ -658,6 +659,7 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
                 mysqlConnection.query('Select Password from credential Where username=?', [username], function(error,results,row){
                     if (results.length >0 ){
                         db_password = results[0].Password;
+                        email= results[0].Email;
                         comparepassword(oldPassword, db_password, (err, isMatch)=>{
                             if (err) throw err;
                             console.log(isMatch)
@@ -670,12 +672,34 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
                                        console.log("password hashed" + password)
                                        mysqlConnection.query("Update credential SET Password=? where username=?", [password,username], (err,results)=>{
                                            if (!err){
-                                               res.status(200)
-                                               res.json({
-                                                   sucess:true,
-                                                   message:"User password updated"
-                                               })
-                                               res.end()
+                                                //--------------------------send email----------------------------------------------------------------
+                                                let transport = nodemailer.createTransport({
+                                                    service: 'gmail',
+                                                    auth: {
+                                                        // should be replaced with real sender's account
+                                                        user: 'oremei.akande@gmail.com',
+                                                        pass: 'oremei@akande'
+                                                    }
+                                                });
+                                                let mailOptions = {
+                                                // should be replaced with real  recipient's account
+                                                from: 'noreplyKayar@gmail.com',
+                                                to: email,
+                                                subject: 'Password Reset',
+                                                text: 'Voilla!!! Your password was successfully changed. With this message is a temporary password. Your new password is  ' + randomstring
+                                                    };
+                                                transport.sendMail(mailOptions, (error, info) => {
+                                                    if (error) {
+                                                        return console.log(error);
+                                                    }
+                                                    console.log('Message %s sent: %s', info.messageId, info.response);
+                                                    res.json({
+                                                        sucess:true,
+                                                        message:"User password updated. Check your mail for password",
+                                                        data:randomstring
+                                                    })
+                                                    res.end()
+                                                });
                                            }else{
                                                res.status(400)
                                                 res.json({
@@ -914,9 +938,8 @@ async function updateRequest(id,status){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         //const result = await connection.execute('update events SET is_leaf=? where requestId=?',[0,id])
-        let data = await connection.execute('update request SET request_status=? where id=?',[status,id])
+        let data = await connection.execute('update request SET status=? where id=?',[status,id])
         console.log("update request")
-        console.log(result)
         data="success"
         return data
     }catch (err){
@@ -971,7 +994,7 @@ async function getItemById(id){
         console.log(err)
         return err
     } 
-}
+} 
 
 async function getItemByName(itemName){
     const mysql2= require('mysql2/promise');
@@ -1005,6 +1028,40 @@ async function getAllItems(limit){
         } 
 }
 
+
+async function compare(arr1, arr2){
+    try {
+        var filtered = arr1.filter(
+            function(e) {
+              return this.indexOf(e) < 0;
+            },
+            arr2
+        );
+        console.log(filtered);
+        data=filtered;
+        return data
+      } catch (err) {
+        console.log(err)
+        return err
+        } 
+}
+async function updateSerialNumber(arr,id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        for (m=0; m<arr.length; m++){
+            sn=arr[m]
+            let data = await connection.execute('update item_serialn SET lotId=? where serialNumber=?',[id,sn])
+        }
+        console.log("update request")
+        data="success"
+        return data
+    }catch (err){
+        return err
+    }
+    
+}
+
 async function splitEvent(event){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -1013,6 +1070,33 @@ async function splitEvent(event){
         let  leftQuantity = parseInt(event.eventQty)-parseInt(event.assQty);
         event1={}
         event2={}
+        // assignedSerialNumbers=event.assignedSerialNumbers;
+        assignedSerialNumbers=["3", "4"];
+        eventId=event.eventId
+        lotSN=[]
+        remSN=[]    //remaining serial number
+        // getting the serialNumbers of the lot from the item_serialn table
+        await getlotSerialNumber(eventId)
+        .then(data=>{
+            if (data.length>0){
+                console.log(data)
+                JSON.stringify(data[0][0].quantity)
+                for (let k=0; k<data[0].length; k++){
+                    SN= JSON.stringify(data[0][k].serialNumber)
+                    lotSN.push(SN);
+                }
+                compare(lotSN, assignedSerialNumbers)
+                .then(data=>{
+                    console.log(data)
+                    //push the remaining serial numbers to remSN array: remainingSerialNumber
+                    for (let k=0; k<data.length; k++){
+                        SN= JSON.stringify(data[k])
+                        remSN.push(SN);
+                    }
+                })
+            }
+        })
+        //------continue normal operation on splitting-----
         event1.item_id=event.itemId;
         event1.quantity=event.assQty
         event1.type='split'
@@ -1027,6 +1111,7 @@ async function splitEvent(event){
             if (data.insertId){
                 console.log("Event1 created")
                 event1.lastId=data.insertId
+                event1.eventId=data.insertId
             }else{
                 console.log("Event1 not created")
             }
@@ -1047,6 +1132,7 @@ async function splitEvent(event){
         .then(data=>{
             if (data.insertId){
                 console.log("Event2 created")
+                data[1].eventId
             }else{
                 console.log("Event2 not created")
             }
@@ -1059,7 +1145,18 @@ async function splitEvent(event){
                console.log("Parent Node not affected")
             }
         })
-        
+        await updateSerialNumber(assignedSerialNumbers,data[0].eventId)
+        .then(data=>{
+            if (data=="success"){
+                cosnsole.log('Serial1 updated')
+            }
+        })
+        await updateSerialNumber(remSN,data[1].eventId)
+        .then(data=>{
+            if (data=="success"){
+                cosnsole.log('Serial2 updated')
+            }
+        })
         return data
     }catch (err){
         console.log(err)
@@ -1181,7 +1278,7 @@ async function getlotSerialNumber(id){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item_serialn where lotId=?', [id]);
-        console.log(result[0])
+        //console.log(result[0])
         let data= result
         return data
 
@@ -1266,15 +1363,15 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     broughtBy=req.body.broughtBy
     status=req.body.status
     category=req.body.category
+    
     comment=req.body.comment
-    is_category=req.query.is_category
     serialNumber=req.body.serialNumber
-    if (comment==""){
+    if (comment=="" || !comment){
         comment="no comment"
     }else{
         comment=comment
     }
-    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy&&category){
+    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && category){
         type='add'
         event={}
         event.type=type;
@@ -1413,13 +1510,14 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
 app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requestStatus=req.body.requestStatus
     requestId=req.body.requestId;
-    if (requestStatus=="ACCEPTED" && requestId){
-    eventId= req.body.event_id;
-    assQty= req.body.assign_quantity;
-    itemId=req.params.id
-    assLocation = req.body.location
-    username=req.body.staff_username
-    status= req.body.status
+    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
+    eventId= req.body.event_id; //id of the lot
+    assQty= req.body.assign_quantity; //number of quantity to be assigned
+    itemId=req.params.id //id of the item or asset
+    itemSN= req.body.assignedSerialNumbers //array of serial numbers to be assigned if exists
+    assLocation = req.body.location //location of the assigned item or lot
+    username=req.body.staff_username //staff to be assigned to
+    status= req.body.status         
     category=req.body.category
     comment=req.body.comment
     event={}
@@ -1434,27 +1532,35 @@ app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)
                 event.eventLocation= JSON.stringify(data[0][0].location)
                 event.assLocation=assLocation;
                 event.itemId=itemId
+                if (itemSN){
+                    event.assignedSerialNumbers=itemSN
+                    console.log(event.assignedSerialNumbers)
+                }
+               
                 // don't forget to add conditionals to compare eventqty and assqty
                 splitEvent(event)
                 .then(data=>{
                     if (data.length>0){
+                        res.status(200)
                         assign=data[0]
-                        console.log("yea")
-                        console.log(assign)
                         assignEvent(assign,username)
                         .then(data=>{
                             if (data=="success"){
-                                updateRequest(requestId,requestStatus)
-                                .then(data=>{
-                                    if (data=="success"){
-                                        console.log("Request updated")
+                                console.log("data is " + data )
+                                if (requestStatus=="ACCEPTED"){
+                                    updateRequest(requestId,requestStatus)
+                                    .then(data=>{
+                                        console.log(data)
+                                        if (data=="success"){
+                                            console.log("Request updated")
+                                            
+                                        }else{
+                                            console.log("Request not updated")
                                         
-                                    }else{
-                                        console.log("Request not updated")
-                                    
-                                    }
-                                    
-                                })
+                                        }
+                                        
+                                    })
+                                }
                                 res.status(200)
                                 res.json({
                                     success:true,
@@ -1509,10 +1615,8 @@ app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)
             res.end()
         }
     }
-    
-
 })
-//------------------------------------------Update Asset----------------------------------------------------------------//
+//------------------------------------------Staff Asset----------------------------------------------------------------//
 app.get('/Staff/Asset', passport.authenticate('jwt', {session:false}), (req,res)=>{
     console.log("here")
     staffName=req.body.staffName;
