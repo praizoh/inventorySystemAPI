@@ -6,7 +6,7 @@ const app = express();
 const bodyparser = require('body-parser');
 const passport = require('passport')
 const path = require('path')
-const nodemailer = require("nodemailer");
+const nodemailer = require("nodemailer"); 
 app.use(bodyparser.json());
 const cors = require('cors');
 app.use(cors())
@@ -656,15 +656,16 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
         mysqlConnection.query('select * from credential where UserName=?',[username], (err,results)=>{
             if (results.length>0){
                 console.log(password)
-                mysqlConnection.query('Select Password from credential Where username=?', [username], function(error,results,row){
+                mysqlConnection.query('Select * from credential Where username=?', [username], function(error,results,row){
                     if (results.length >0 ){
                         db_password = results[0].Password;
                         email= results[0].Email;
+                        console.log(results)
                         comparepassword(oldPassword, db_password, (err, isMatch)=>{
                             if (err) throw err;
                             console.log(isMatch)
                             if (isMatch){
-                                bcrypt.genSalt(10, (err,salt)=> {
+                                bcrypt.genSalt(10, (err,salt)=> { 
                                     bcrypt.hash(password, salt, (err,hash) => {
                                        // console.log(hash)
                                         if (err) throw err;
@@ -693,6 +694,7 @@ app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,r
                                                         return console.log(error);
                                                     }
                                                     console.log('Message %s sent: %s', info.messageId, info.response);
+                                                    res.status(200)
                                                     res.json({
                                                         sucess:true,
                                                         message:"User password updated. Check your mail for password",
@@ -953,7 +955,6 @@ async function getEventById(id){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from events where id=?', [id]);
-        console.log(result[0])
         let data= result
         return data
 
@@ -1045,13 +1046,17 @@ async function compare(arr1, arr2){
         return err
         } 
 }
-async function updateSerialNumber(arr,id){
+async function updateSerialNumber(arr,id, eventId){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
+        console.log('serial')
+        console.log(arr)
+        console.log(id)
+        console.log(eventId)
         for (m=0; m<arr.length; m++){
             sn=arr[m]
-            let data = await connection.execute('update item_serialn SET lotId=? where serialNumber=?',[id,sn])
+            let data = await connection.execute('update item_serialn SET lotId=? where serialNumber=? and lotId=?',[id,sn, eventId])
         }
         console.log("update request")
         data="success"
@@ -1070,16 +1075,16 @@ async function splitEvent(event){
         let  leftQuantity = parseInt(event.eventQty)-parseInt(event.assQty);
         event1={}
         event2={}
-        // assignedSerialNumbers=event.assignedSerialNumbers;
-        assignedSerialNumbers=["3", "4"];
+        assignedSerialNumbers=event.assignedSerialNumbers;
         eventId=event.eventId
         lotSN=[]
         remSN=[]    //remaining serial number
+        assignedId=''
+        remId=''
         // getting the serialNumbers of the lot from the item_serialn table
         await getlotSerialNumber(eventId)
         .then(data=>{
             if (data.length>0){
-                console.log(data)
                 JSON.stringify(data[0][0].quantity)
                 for (let k=0; k<data[0].length; k++){
                     SN= JSON.stringify(data[0][k].serialNumber)
@@ -1087,10 +1092,9 @@ async function splitEvent(event){
                 }
                 compare(lotSN, assignedSerialNumbers)
                 .then(data=>{
-                    console.log(data)
                     //push the remaining serial numbers to remSN array: remainingSerialNumber
                     for (let k=0; k<data.length; k++){
-                        SN= JSON.stringify(data[k])
+                        SN= data[k]
                         remSN.push(SN);
                     }
                 })
@@ -1126,17 +1130,18 @@ async function splitEvent(event){
         event2.brought_by='None'
         event2.assigned_to='not assigned'
         event2.parent_id= event.eventId
-        data.push(event2)
+        
         console.log(data)
         await createEvent(event2)
         .then(data=>{
             if (data.insertId){
                 console.log("Event2 created")
-                data[1].eventId
+                event2.eventId=data.insertId
             }else{
                 console.log("Event2 not created")
             }
         })
+        data.push(event2)
         await updateEvent(event1.parent_id)
         .then(result=>{
             if (result){
@@ -1145,16 +1150,17 @@ async function splitEvent(event){
                console.log("Parent Node not affected")
             }
         })
-        await updateSerialNumber(assignedSerialNumbers,data[0].eventId)
+        await updateSerialNumber(assignedSerialNumbers,data[0].eventId, eventId)
         .then(data=>{
             if (data=="success"){
-                cosnsole.log('Serial1 updated')
+                console.log('Serial1 updated')
             }
         })
-        await updateSerialNumber(remSN,data[1].eventId)
+        await updateSerialNumber(remSN,data[1].eventId, eventId)
         .then(data=>{
+            console.log('remSn')
             if (data=="success"){
-                cosnsole.log('Serial2 updated')
+                console.log('Serial2 updated')
             }
         })
         return data
@@ -1168,9 +1174,7 @@ async function assignEvent(event, username){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         event.assigned_to=username
-        console.log(event.assigned_to)
         event.parent_id=event.lastId
-        console.log(event.parent_id)
         event.type='assign'
         await createEvent(event)
         .then(data=>{
@@ -1278,7 +1282,6 @@ async function getlotSerialNumber(id){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item_serialn where lotId=?', [id]);
-        //console.log(result[0])
         let data= result
         return data
 
@@ -1288,6 +1291,120 @@ async function getlotSerialNumber(id){
         return err
     } 
 }
+//const waitFor = (ms) => new Promise(r => setTimeout(r, ms));
+
+// const  processArray = async (array, username, requestId, requestStatus,assLocation,comment) =>{
+    
+//         username=username;
+//         requestId=requestId;
+//         requestStatus=requestStatus;
+//         assLocation=assLocation;
+//         comment=comment
+//         let data;
+//         const split= await Promise.all(array.map(item=>{ assignSplit(item, username, requestId, requestStatus,assLocation,comment)
+//             console.log("Status =>", split)
+//         })); 
+//         console.log('Done!');    
+//         return data=="success"
+
+
+// }
+// const assignSplit = (item, username, requestId, requestStatus,assLocation,comment) => {  
+
+//     return new Promise(async (resolve,reject) => {
+//           //this is a mock email send logic
+//           setTimeout(() => {
+//             console.log(item.eventId)
+//               resolve(3);
+//           },3000);
+  
+//     })
+//   }
+
+function delay() {
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+  
+async function delayedLog(item,username, requestId, requestStatus, assLocation, comment) {
+    // notice that we can await a function
+    // that returns a promise
+    username=username;
+    requestId=requestId;
+    requestStatus=requestStatus;
+    assLocation=assLocation;
+    comment=comment
+    await delay();
+    console.log(item.event_id);
+            eventId= item.event_id; //id of the lot
+            assQty= item.assign_quantity; //number of quantity to be assigned
+            itemId=item.itemId //id of the item or asset
+            itemSN= item.assignedSerialNumbers //array of serial numbers to be assigned if exists
+            console.log(eventId, assQty, itemId, itemSN)
+            event={}
+            if (eventId && assQty){
+                getEventById(eventId)
+                .then(data=>{
+                    if (data.length>0){
+                        event.eventId=eventId
+                        event.assQty=assQty
+                        event.eventQty= JSON.stringify(data[0][0].quantity)
+                        event.eventLocation= JSON.stringify(data[0][0].location)
+                        event.assLocation=assLocation;
+                        event.itemId=itemId
+                        if (itemSN){
+                            event.assignedSerialNumbers=itemSN
+                        }
+                    
+                        // don't forget to add conditionals to compare eventqty and assqty
+                        splitEvent(event)
+                        .then(data=>{
+                            if (data.length>0){ 
+                                assign=data[0]
+                                assignEvent(assign,username)
+                                .then(data=>{ 
+                                    if (data=="success"){
+                                        if (requestStatus=="ACCEPTED"){
+                                            updateRequest(requestId,requestStatus)
+                                            .then(data=>{
+                                                if (data=="success"){
+                                                    console.log("Request updated")
+                                                    
+                                                }else{
+                                                    console.log("Request not updated")
+                                                
+                                                }
+                                                
+                                            })
+                                        }
+                                        
+                                    }
+                                })
+                            }else{
+                                console.log("Asset not assigned")
+                                
+                            }
+                        })
+                    }else{
+                        console.log("Event not found")
+                        
+                    }
+                })
+                
+            }
+  }
+  
+async function processArray(array,username, requestId, requestStatus, assLocation, comment) {
+    username=username;
+    requestId=requestId;
+    requestStatus=requestStatus;
+    assLocation=assLocation;
+    comment=comment
+    for (const item of array) {
+      await delayedLog(item,username, requestId, requestStatus, assLocation, comment);
+    }
+    console.log('Done!'); 
+    return data="success" 
+  }
 
 
 
@@ -1507,88 +1624,36 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     
 })
 //------------------------------------------Assign Asset----------------------------------------------------------------//
-app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    requestStatus=req.body.requestStatus
-    requestId=req.body.requestId;
-    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
-    eventId= req.body.event_id; //id of the lot
-    assQty= req.body.assign_quantity; //number of quantity to be assigned
-    itemId=req.params.id //id of the item or asset
-    itemSN= req.body.assignedSerialNumbers //array of serial numbers to be assigned if exists
-    assLocation = req.body.location //location of the assigned item or lot
-    username=req.body.staff_username //staff to be assigned to
-    status= req.body.status         
-    category=req.body.category
-    comment=req.body.comment
-    event={}
-    //if (eventId && assQty && itemId && assLocation && username && status && category && )
-    if (eventId && assQty){
-        getEventById(eventId)
+app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
+   assets=req.body.assets;
+   username=req.body.staff_username //staff to be assigned to
+   requestId=req.body.requestId; 
+   requestStatus=req.body.requestStatus
+   comment=req.body.comment
+   assLocation = req.body.location //location of the assigned item or lot
+   if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
+        // processArray(assets, username, requestId, requestStatus, assLocation, comment)
+        console.log(assets, username, requestId, requestStatus, assLocation, comment)
+        processArray(assets, username, requestId, requestStatus, assLocation, comment)
         .then(data=>{
-            if (data.length>0){
-                event.eventId=eventId
-                event.assQty=assQty
-                event.eventQty= JSON.stringify(data[0][0].quantity)
-                event.eventLocation= JSON.stringify(data[0][0].location)
-                event.assLocation=assLocation;
-                event.itemId=itemId
-                if (itemSN){
-                    event.assignedSerialNumbers=itemSN
-                    console.log(event.assignedSerialNumbers)
-                }
-               
-                // don't forget to add conditionals to compare eventqty and assqty
-                splitEvent(event)
-                .then(data=>{
-                    if (data.length>0){
-                        res.status(200)
-                        assign=data[0]
-                        assignEvent(assign,username)
-                        .then(data=>{
-                            if (data=="success"){
-                                console.log("data is " + data )
-                                if (requestStatus=="ACCEPTED"){
-                                    updateRequest(requestId,requestStatus)
-                                    .then(data=>{
-                                        console.log(data)
-                                        if (data=="success"){
-                                            console.log("Request updated")
-                                            
-                                        }else{
-                                            console.log("Request not updated")
-                                        
-                                        }
-                                        
-                                    })
-                                }
-                                res.status(200)
-                                res.json({
-                                    success:true,
-                                    message:"Asset assigned successfully"
-                                })
-                            }
-                        })
-                    }else{
-                        res.status(400)
-                        res.json({
-                            success:false,
-                            message:"Asset not assigned"
-                        })
-                    }
-                })
+            if (data=="success"){
+                res.status(200)
+                res.json({
+                success:true,
+                message:"Asset assigned successfully"
+            })
             }else{
                 res.status(400)
                 res.json({
-                    success:false,
-                    message:"Event not found"
-                })
+                success:false,
+                data
+        })
             }
         })
-    }
-    
+        
     }else{
         
-       if (requestStatus=="NOT GRANTED" && requestId){
+        if (requestStatus=="NOT GRANTED" && requestId){
             updateRequest(requestId,requestStatus)
             .then(data=>{
                 if (data=="success"){
@@ -1614,7 +1679,8 @@ app.post('/Assign/:id', passport.authenticate('jwt', {session:false}), (req,res)
             })
             res.end()
         }
-    }
+ }
+   
 })
 //------------------------------------------Staff Asset----------------------------------------------------------------//
 app.get('/Staff/Asset', passport.authenticate('jwt', {session:false}), (req,res)=>{
