@@ -35,260 +35,735 @@ db.connect((err) => {
     console.log('MySql Connected...');
 });
 const mysqlConnection = db;
-
 //----------------------------------------------------REGISTER NEW USER---------------------------------------------//
-app.post('/User', (req,res)=>{
-    firstname= req.body.firstname;
-    lastname= req.body.lastname;
-    username= req.body.username;
-    role = req.body.roles;
-    email= req.body.email;
-    phonenumber= req.body.phonenumber;
-    
-    if (firstname && lastname && username && email && phonenumber && role){
-        //check if email already exits
-        mysqlConnection.query('SELECT * from credential WHERE UserName=? or Email=?', [username,email], function(error,results,fields){
-            if (results.length > 0){
-                res.status(400)
-                res.json({
-                    success:false,
-                    message:"User already exists"
-                });
-                //res.send("user already exists")
-                res.end()
-            }else
-            {   
-                const randomstring = Math.random().toString(36).slice(-8);
-                password= randomstring;
-                bcrypt.genSalt(10, (err,salt)=> {
-                    bcrypt.hash(password, salt, (err,hash) => {
-                        if (err) throw err;
-                        password=hash;
-                       console.log("password hashed " + password)
-                        mysqlConnection.query("insert into user (FirstName, LastName, UserName, Email, PhoneNumber) values ('"+firstname+"','"+lastname+"', '"+username+"', '"+email+"', '"+phonenumber+"')", (err, results)=>{
-                           
-                            if (!err){
-                                
-                                const lastId = results.insertId;
-                                console.log(lastId + "1")
+    app.post('/User', (req,res)=>{
+        firstname= req.body.firstname;
+        lastname= req.body.lastname;
+        username= req.body.username;
+        role = req.body.roles;
+        email= req.body.email;
+        phonenumber= req.body.phonenumber;
+        
+        if (firstname && lastname && username && email && phonenumber && role){
+            //check if email already exits
+            mysqlConnection.query('SELECT * from credential WHERE UserName=? or Email=?', [username,email], function(error,results,fields){
+                if (results.length > 0){
+                    res.status(400)
+                    res.json({
+                        success:false,
+                        message:"User already exists"
+                    });
+                    //res.send("user already exists")
+                    res.end()
+                }else
+                {   
+                    const randomstring = Math.random().toString(36).slice(-8);
+                    password= randomstring;
+                    bcrypt.genSalt(10, (err,salt)=> {
+                        bcrypt.hash(password, salt, (err,hash) => {
+                            if (err) throw err;
+                            password=hash;
+                        console.log("password hashed " + password)
+                            mysqlConnection.query("insert into user (FirstName, LastName, UserName, Email, PhoneNumber) values ('"+firstname+"','"+lastname+"', '"+username+"', '"+email+"', '"+phonenumber+"')", (err, results)=>{
+                            
+                                if (!err){
+                                    
+                                    const lastId = results.insertId;
+                                    console.log(lastId + "1")
 
-                                for (let j=0; j<role.length; j++){
-                                    console.log("here")
-                                    console.log(role[j])
-                                    rolename=role[j]
-                                    mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
-                                        if (results.length>0){
-                                            console.log(results)
-                                            roleId=results[0].role_id
-                                            console.log('roleId is ' + roleId)
-                                            console.log(lastId + "llop start")
-                                            mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+lastId+"', '"+roleId+"')", (err)=>{
-                                                console.log(lastId + j)
-                                                if (!err){
-                                                    console.log("role "+ role[j] + " inserted")
-                                                }else{
-                                                    console.log("role " + roleId + " not inserted")
-                                                }
-                                            })
+                                    for (let j=0; j<role.length; j++){
+                                        console.log("here")
+                                        console.log(role[j])
+                                        rolename=role[j]
+                                        mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
+                                            if (results.length>0){
+                                                console.log(results)
+                                                roleId=results[0].role_id
+                                                console.log('roleId is ' + roleId)
+                                                console.log(lastId + "llop start")
+                                                mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+lastId+"', '"+roleId+"')", (err)=>{
+                                                    console.log(lastId + j)
+                                                    if (!err){
+                                                        console.log("role "+ role[j] + " inserted")
+                                                    }else{
+                                                        console.log("role " + roleId + " not inserted")
+                                                    }
+                                                })
+                                            
+                                                
+                                            }else{
+                                                console.log("roles not inserted")
+                                            }
+                                        }) 
+                                    } 
+                                    console.log("user roles added")
+                                
+                                }
+                                else
+                                console.log(err);
+                            });
+                            
+                            
+                            mysqlConnection.query("insert into credential (UserName, Password, Email) values ('"+username+"','"+password+"', '"+email+"')", (err)=>{
+                            console.log("db pass" + password);
+                                if (!err){
+
+                                    //--------------------------send email----------------------------------------------------------------
+                                    let transport = nodemailer.createTransport({
+                                        host: 'smtp.mailtrap.io',
+                                        port: 25,
+                                        secure: false,
                                         
+                                        auth: {
+                                            // should be replaced with real sender's account
+                                            user: '90d97788acb6ef',
+                                            pass: 'e9fe5491a68bc7'
+                                        }
+                                    });
+                                    let mailOptions = {
+                                        // should be replaced with real  recipient's account
+                                        from: 'noreplyKayar@gmail.com',
+                                        to: 'oremei.akande@gmail.com',
+                                        subject: 'Login Password',
+                                        text: 'Your Passsword is ' + randomstring
+                                    };
+                                    transport.sendMail(mailOptions, (error, info) => {
+                                        if (error) {
+                                            return console.log(error);
+                                        }
+                                        console.log('Message %s sent: %s', info.messageId, info.response);
+                                        res.status(201);
+                                        res.json({
+                                            sucess:true,
+                                            message:"User password updated",
+                                            data:randomstring
+                                        })
+                                        res.end()
+                                    });
+                                
+
+
+
+
+                                    res.status(201)
+                                    res.send("user created")
+                                    console.log("user created")
+                                    res.end()
+
+                                }
+                                else
+                                    console.log(err);
+                            });
+                        })
+                    });
+                }
+            })
+
+        } else{
+            res.status(401);
+            res.json({
+                success:false,
+                message:"Enter correct register details"
+            })
+        }
+    })
+
+
+    //---------------+----------------------------LOGIN-----------------------------------------------------------------------//
+    app.post('/login', (req,res)=>{                                     
+    const username= req.body.username;
+        const password = req.body.password;
+        
+        if(username && password){
+            mysqlConnection.query('SELECT * from credential Where username=?', [username], function(error,results,fields){
+                if (results.length >0){
+                    let db_password = mysqlConnection.query('SELECT Password from credential WHERE username=?', [username], function(error,results,row){
+                        if (results.length > 0){
+                            console.log(results[0].Password);
+                            db_password=results[0].Password;
+                            //res.status(200)
+                            comparepassword(password, db_password, (err, isMatch) =>{
+                                if (err) throw err;
+                                console.log(isMatch)
+                                if (isMatch) {
+                                    // get data of the user
+                                    let roles = [];
+                                    let result= mysqlConnection.query('Select * from user Where Username=? and isActive=1', [username], function(error,results,fields){
+                                        if (results.length > 0){
+                                            // convert user to json
+                                            const data = JSON.parse(JSON.stringify(results));
+                                            let result = mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.username=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [username], function(error,results,fields){
+                                                if (results.length>0){
+                                                    Object.keys(results).forEach(function(key) {
+                                                        var row = results[key];
+                                                        console.log(row.Role)
+                                                        roles.push(row.Role)
+                                                    });
+                                                    // add property roles to the user object
+                                                    data[0].Roles=roles;
+                                                    
+                                                        //json token
+                                                        const token = jwt.sign({
+                                                            data
+                                                        },
+                                                        secret, {
+                                                            expiresIn: 604800 //one week in miliseconds
+                                                        }
+                                                        );
+                                                        res.status(200)
+                                                        return res.json({
+                                                            success:true,
+                                                            
+                                                            token:"JWT " + token,
+                                                            roleId:data[0].Roles,
+                                                            Staff_Id:data[0].Staff_Id
+                                                        });
+                                                }else {
+                                                    res.status(401)
+                                                    return res.json({
+                                                        success:false
+                                                    })
+                                                    res.end();
+                                                }
+                                            });
+                                            
                                             
                                         }else{
-                                            console.log("roles not inserted")
+                                            return res.json({
+                                                success:false,
+                                                message:"user not found or not active"
+                                            })
                                         }
-                                    }) 
-                                } 
-                                console.log("user roles added")
-                            
-                            }
-                            else
-                            console.log(err);
-                        });
-                        
-                        
-                        mysqlConnection.query("insert into credential (UserName, Password, Email) values ('"+username+"','"+password+"', '"+email+"')", (err)=>{
-                        console.log("db pass" + password);
-                            if (!err){
-
-                                //--------------------------send email----------------------------------------------------------------
-                                let transport = nodemailer.createTransport({
-                                    host: 'smtp.mailtrap.io',
-                                    port: 25,
-                                    secure: false,
-                                    
-                                    auth: {
-                                        // should be replaced with real sender's account
-                                        user: '90d97788acb6ef',
-                                        pass: 'e9fe5491a68bc7'
-                                    }
-                                });
-                                let mailOptions = {
-                                    // should be replaced with real  recipient's account
-                                    from: 'noreplyKayar@gmail.com',
-                                    to: 'oremei.akande@gmail.com',
-                                    subject: 'Login Password',
-                                    text: 'Your Passsword is ' + randomstring
-                                };
-                                transport.sendMail(mailOptions, (error, info) => {
-                                    if (error) {
-                                        return console.log(error);
-                                    }
-                                    console.log('Message %s sent: %s', info.messageId, info.response);
-                                    res.status(201);
-                                    res.json({
-                                        sucess:true,
-                                        message:"User password updated",
-                                        data:randomstring
                                     })
-                                    res.end()
-                                });
-                               
-
-
-
-
-                                res.status(201)
-                                res.send("user created")
-                                console.log("user created")
-                                res.end()
-
-                            }
-                            else
-                                console.log(err);
-                        });
+                            
+                                }else{
+                                    return res.json({
+                                        success: false,
+                                        message: "Wrong Username or Password"
+                                    })
+                                }
+                            })
+                            
+                        }
+                    });
+                }else{
+                    res.status(401)
+                    res.json({
+                        success:false,
+                        message:"Incorrect login details"
                     })
-                });
-            }
-        })
+                    
+                }
+            })
+        }else{
+            res.status(401)
+            res.json({
+                success:false,
+                message:"Enter the correct details"
+            });
+            
+        }
 
-    } else{
-        res.status(401);
-        res.json({
-            success:false,
-            message:"Enter correct register details"
-        })
-    }
-})
+        //bcrypt function
+        function comparepassword(password, hash, callback){
+            console.log('ordi pass ' + password)
+            console.log('db pass ' + hash)
+            bcrypt.compare(password, hash, (err, isMatch)=>{
+                if (err) throw err
+                callback(null, isMatch)
+                
+            })
+        }
+    })
 
 
-//---------------+----------------------------LOGIN-----------------------------------------------------------------------//
-app.post('/login', (req,res)=>{                                     
-  const username= req.body.username;
-    const password = req.body.password;
-    
-    if(username && password){
-        mysqlConnection.query('SELECT * from credential Where username=?', [username], function(error,results,fields){
-            if (results.length >0){
-                let db_password = mysqlConnection.query('SELECT Password from credential WHERE username=?', [username], function(error,results,row){
-                    if (results.length > 0){
-                        console.log(results[0].Password);
-                        db_password=results[0].Password;
-                        //res.status(200)
-                        comparepassword(password, db_password, (err, isMatch) =>{
-                            if (err) throw err;
-                            console.log(isMatch)
-                            if (isMatch) {
-                                // get data of the user
-                                let roles = [];
-                                let result= mysqlConnection.query('Select * from user Where Username=? and isActive=1', [username], function(error,results,fields){
-                                    if (results.length > 0){
-                                        // convert user to json
-                                        const data = JSON.parse(JSON.stringify(results));
-                                        let result = mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.username=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [username], function(error,results,fields){
-                                            if (results.length>0){
-                                                Object.keys(results).forEach(function(key) {
-                                                    var row = results[key];
-                                                    console.log(row.Role)
-                                                    roles.push(row.Role)
-                                                  });
-                                                  // add property roles to the user object
-                                                  data[0].Roles=roles;
-                                                  
-                                                    //json token
-                                                    const token = jwt.sign({
-                                                        data
-                                                    },
-                                                    secret, {
-                                                        expiresIn: 604800 //one week in miliseconds
-                                                    }
-                                                    );
-                                                    res.status(200)
-                                                    return res.json({
-                                                        success:true,
-                                                        
-                                                        token:"JWT " + token,
-                                                        roleId:data[0].Roles,
-                                                        Staff_Id:data[0].Staff_Id
-                                                    });
-                                            }else {
-                                                res.status(401)
-                                                return res.json({
-                                                    success:false
-                                                })
-                                                res.end();
-                                            }
-                                        });
-                                        
-                                        
-                                    }else{
-                                        return res.json({
-                                            success:false,
-                                            message:"user not found or not active"
-                                        })
-                                    }
-                                })
-                           
-                            }else{
-                                return res.json({
-                                    success: false,
-                                    message: "Wrong Username or Password"
-                                })
-                            }
-                        })
-                        
+    // bring in the passport authentication strategy
+    require('./passport')(passport);
+
+    //---------------------------------VIEW USER BY ID, VIEW USER PROFILE---------------------------------------------------
+
+    app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        console.log(req.user)
+        id= req.params.id;
+        mysqlConnection.query('Select * from user Where Staff_Id=?', [id], function(error,results,fields){
+            if (results.length > 0){
+                const data = JSON.parse(JSON.stringify(results));
+                mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
+                    if (results.length>0){
+                        Object.keys(results).forEach(function(key) {
+                            var row = results[key];
+                            console.log(row.Role)
+                            roles.push(row.Role)
+                        });
+                        // add property roles to the user object
+                        data[0].Roles=roles;
+                        res.status(200);
+                        return res.json({
+                            success:true,
+                            data   
+                        });
+                    }else{
+                        res.status(400);
+                        res.json("User not found")
                     }
                 });
+                
+                
             }else{
-                res.status(401)
+                res.status(401);
+                res.json("User details not correct")
+            }
+        });
+
+
+    })
+
+    //the url below activates or deactivates a user
+    app.put('/status/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        id= req.params.staffId
+        console.log(id)
+        if (id){
+            mysqlConnection.query('Select isActive from user where staff_id=?', [id], function(err,results,fields){
+                console.log(results)
+                if (results.length > 0){
+                    isActive=results[0].isActive
+                    newIsActive=!isActive
+                    mysqlConnection.query('Update user SET isActive=? where staff_id=?', [newIsActive, id], (err)=>{
+                        if (!err){
+                            res.status(200)
+                            res.json({
+                                success:true,
+                                message:"User status updated successfully"
+                            })
+                        }else{
+                            console.log(err)
+                            res.status(400)
+                            res.json({
+                                success:false,
+                                message:"User status not successfully updated"
+                            })
+                        }
+                    })
+                }else{
+                    res.status(401)
+                    res.json("User not found")
+                }
+            })
+        
+        }else{
+            res.status(409)
+            res.json({
+                success:false,
+                message:"Enter correct details"
+            })
+        }
+    })
+
+    //----------------------------VIEW USERS AND FILTER---------------------------------------------------------------------//
+    app.get('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        console.log(req.user)
+        id= req.params.id;
+        let role=req.query.role;
+        let limit=req.query.limit;
+        let isActive=req.query.isActive;
+        if (limit){
+            limit=parseInt(limit)
+            console.log(limit)
+        }else{
+            limit=10
+        }
+        if (isActive){
+            isActive=isActive
+            console.log(isActive)
+
+        }else{
+            isActive=1
+        }
+        if (!role){
+            mysqlConnection.query('select * from user u where u.isActive=? order by u.Date_Created DESC limit ?', [isActive, limit],  function(error,results,fields){
+                console.log(results);
+                if (results.length > 0){
+                    const data = JSON.parse(JSON.stringify(results));
+                    res.status(200)
+                    return res.json({
+                        success:true,
+                        data   
+                    });
+                }else{
+                    res.status(400);
+                }
+            });
+            
+        }else{
+            console.log(role)
+            mysqlConnection.query('select * from user u, role r, user_role s where r.role_id=s.role_id and s.staff_id=u.staff_id and u.isActive=? and r.role_name=? order by u.Date_Created DESC limit ?', [isActive, role, limit],  function(error,results,fields){
+                console.log(results);
+                if (results.length > 0){
+                    const data = JSON.parse(JSON.stringify(results));
+                    res.status(200)
+                    return res.json({
+                        success:true,
+                        data   
+                    });
+        
+                    
+                    
+                }else{
+                    res.status(400);
+                }
+            });
+        }
+        
+
+
+    });
+
+    app.get('/count/Users', (req,res)=>{
+        mysqlConnection.query('SELECT COUNT(Staff_Id) AS NumberOfUsers FROM user', function(error, results){
+            if (!error){
+                const data = JSON.parse(JSON.stringify(results));
+                res.status(200)
+                res.json({
+                success:true,
+                data
+                })
+            }else{
+                res.status(400);
                 res.json({
                     success:false,
-                    message:"Incorrect login details"
+                    message: 'Could not return number of users at this time'
                 })
-                
             }
         })
-    }else{
-        res.status(401)
+    })
+
+    //----------------------------------------UPDATE USERS------------------------------------------------------------------//
+    app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        id = req.body.staff_id;
+        username=req.body.username;
+        firstname= req.body.firstname;
+        lastname= req.body.lastname;
+        email= req.body.email;
+        role= req.body.roles; 
+        phonenumber= req.body.phonenumber;
+        
+        if (firstname && lastname && email && phonenumber && role && id && username){
+            mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=? where Staff_Id=?', [firstname, lastname, email, phonenumber, id], (err)=>{
+                // ----------------------------Email update on credential----------------------------
+                if (!err){
+                    mysqlConnection.query("update credential SET Email=? where UserName=?",[email,username], (err)=>{
+                        if (!err){
+                            console.log("Email updated");
+                        }else{
+                            console.log(err)
+                        }
+                    });
+                    //update user roles
+
+                    mysqlConnection.query('Delete from user_role where Staff_Id=?', [id], (err)=>{
+                        if (!err){
+                            console.log("Deleted roles successfully")
+                        }else{
+                            console.log(err);
+                        }
+                    
+                    })
+                    for (let j=0; j<role.length; j++){
+                        console.log("here")
+                        console.log(role[j])
+                        rolename=role[j]
+                        mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
+                            if (results.length>0){
+                                console.log(results)
+                                roleId=results[0].role_id
+                                console.log('roleId is ' + roleId)
+                                mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+id+"', '"+roleId+"')", (err)=>{
+                                    if (!err){
+                                        console.log("role "+ role[j] + " inserted")
+                                    }else{
+                                        console.log("role " + roleId + " not inserted")
+                                    }
+                                })
+                            
+                                
+                            }else{
+                                console.log("roles not inserted")
+                            }
+                        }) 
+                    } 
+                    console.log("user roles added")
+            
+                    res.status(200);
+                    res.json({
+                        success:true,
+                        message:"user updated"
+
+                    });
+                    res.end();
+                }
+                else
+                    console.log(err);
+            });
+            
+        }else{
+            res.status(400)
+            res.json({
+                success:false,
+                message:"supply correct details"
+            })
+        }
+    })
+
+
+    //-----------------------------------------------  HANDLING ROLES ------------------------------------------------------//
+    app.post('/roles', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        staffId= req.body.staff_id;
+        role=req.body.roles;
+        console.log(staffId)
+        console.log(role);
+        if (role && staffId){
+        mysqlConnection.query('Delete from user_role where Staff_Id=?', [staffId], (err)=>{
+            if (!err){
+                console.log("Deleted roles successfully")
+            }else{
+                console.log(err);
+            }
+        
+        })
+        for (let j=0; j<role.length; j++){
+            console.log("here")
+            console.log(role[j])
+            rolename=role[j]
+            mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
+                if (results.length>0){
+                    console.log(results)
+                    roleId=results[0].role_id
+                    console.log('roleId is ' + roleId)
+                    mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+staffId+"', '"+roleId+"')", (err)=>{
+                        if (!err){
+                            console.log("role "+ role[j] + " inserted")
+                        }else{
+                            console.log("role " + roleId + " not inserted")
+                        }
+                    })
+                
+                    
+                }else{
+                    console.log("roles not inserted")
+                }
+            }) 
+        } res.json({
+            success:true,
+            message:"Role updated"
+        })
+        
+    } else{
         res.json({
             success:false,
-            message:"Enter the correct details"
-        });
-        
-    }
-
-    //bcrypt function
-    function comparepassword(password, hash, callback){
-        console.log('ordi pass ' + password)
-        console.log('db pass ' + hash)
-        bcrypt.compare(password, hash, (err, isMatch)=>{
-            if (err) throw err
-            callback(null, isMatch)
-            
+            message:"Enter the right details"
         })
     }
-})
+    })
 
+    //----------------------------------------FORGOT PASSWORD-------------------------------------------------------------//
+    app.put('/forgotPassword', (req,res)=>{
+        email= req.body.email;
+        if (email){
+            console.log(email);
+            mysqlConnection.query('select * from credential where Email=?', [email], (err,results)=>{
+                console.log(results);
+                if (results.length>0){
+                    console.log("user exists");
+                    const randomstring = Math.random().toString(36).slice(-8);
+                    password= randomstring;
+                    console.log(password)
+                    bcrypt.genSalt(10, (err,salt)=> {
+                        bcrypt.hash(password, salt, (err,hash) => {
+                        // console.log(hash)
+                            if (err) throw err;
+                            password=hash;
+                        console.log("password hashed" + password)
+                        mysqlConnection.query("Update credential SET Password=? where email=?", [password,email], (err,results)=>{
+                            if (!err){
+                                res.status(200);
+                                console.log('User Password Updated')
+                                    //--------------------------send email----------------------------------------------------------------
+                                    let transport = nodemailer.createTransport({
+                                        service: 'gmail',
+                                        auth: {
+                                            // should be replaced with real sender's account
+                                            user: 'oremei.akande@gmail.com',
+                                            pass: 'oremei@akande'
+                                        }
+                                    });
+                                    let mailOptions = {
+                                        // should be replaced with real  recipient's account
+                                        from: 'noreplyKayar@gmail.com',
+                                        to: 'sumbomatic@gmail.com',
+                                        subject: 'Password Reset',
+                                        text: 'You are receiving this message because you put in for a password reset. With this message is a temporary password. Login in to the site with it and reset your  password afterwards. Your temporary password is  ' + randomstring
+                                    };
+                                    transport.sendMail(mailOptions, (error, info) => {
+                                        if (error) {
+                                            return console.log(error);
+                                        }
+                                        console.log('Message %s sent: %s', info.messageId, info.response);
+                                        res.json({
+                                            sucess:true,
+                                            message:"User password updated. Check your mail for password",
+                                            data:randomstring
+                                        })
+                                        res.end()
+                                    });
+                                
+                            }else{
+                                res.status(400)
+                                    res.json({
+                                        sucess:false,
+                                        message:"Password not updated"
+                                    })
+                                    res.end()
+                            }
+                        });
+                        })
+                    });
 
-// bring in the passport authentication strategy
-require('./passport')(passport);
+                
+                }else{
+                    res.status(401);
+                    res.json({
+                        success:false,
+                        message:"User does not exist"
+                    })
+                }
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"Incorrect Details"
+            })
+        }
+    })
 
-//---------------------------------VIEW USER BY ID, VIEW USER PROFILE---------------------------------------------------
+    app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        username=req.body.username;
+        oldPassword=req.body.oldPassword;
+        password= req.body.newPassword;
+        randomstring=password
+        if (username && password){
+            mysqlConnection.query('select * from credential where UserName=?',[username], (err,results)=>{
+                if (results.length>0){
+                    console.log(password)
+                    mysqlConnection.query('Select * from credential Where username=?', [username], function(error,results,row){
+                        if (results.length >0 ){
+                            db_password = results[0].Password;
+                            email= results[0].Email;
+                            console.log(results)
+                            comparepassword(oldPassword, db_password, (err, isMatch)=>{
+                                if (err) throw err;
+                                console.log(isMatch)
+                                if (isMatch){
+                                    bcrypt.genSalt(10, (err,salt)=> { 
+                                        bcrypt.hash(password, salt, (err,hash) => {
+                                        // console.log(hash)
+                                            if (err) throw err;
+                                            password=hash;
+                                        console.log("password hashed" + password)
+                                        mysqlConnection.query("Update credential SET Password=? where username=?", [password,username], (err,results)=>{
+                                            if (!err){
+                                                    //--------------------------send email----------------------------------------------------------------
+                                                    let transport = nodemailer.createTransport({
+                                                        service: 'gmail',
+                                                        auth: {
+                                                            // should be replaced with real sender's account
+                                                            user: 'oremei.akande@gmail.com',
+                                                            pass: 'oremei@akande'
+                                                        }
+                                                    });
+                                                    let mailOptions = {
+                                                    // should be replaced with real  recipient's account
+                                                    from: 'noreplyKayar@gmail.com',
+                                                    to: email,
+                                                    subject: 'Password Reset',
+                                                    text: 'Voilla!!! Your password was successfully changed. With this message is a temporary password. Your new password is  ' + randomstring
+                                                        };
+                                                    transport.sendMail(mailOptions, (error, info) => {
+                                                        if (error) {
+                                                            return console.log(error);
+                                                        }
+                                                        console.log('Message %s sent: %s', info.messageId, info.response);
+                                                        res.status(200)
+                                                        res.json({
+                                                            sucess:true,
+                                                            message:"User password updated. Check your mail for password",
+                                                            data:randomstring
+                                                        })
+                                                        res.end()
+                                                    });
+                                            }else{
+                                                res.status(400)
+                                                    res.json({
+                                                        sucess:false,
+                                                        message:"Password not updated"
+                                                    })
+                                                    res.end()
+                                            }
+                                        });
+                                        })
+                                    });
+                                }else{
+                                    res.status(409)
+                                    res.json({
+                                        success:false,
+                                        message:"old password does not match"
+                                    })
+                                    res.end()
+                                }
+                            })
+                        }else{
+                            res.json({
+                                success:false,
+                                message:"User does not exist"
+                            })
+                            res.end()
+                        }
+                    })
+                    
+                }else{
+                    res.status(401);
+                    res.json({
+                        success:false,
+                        message:"user does  not exist"
+                    })
+                }
+            })
+        }else{
+            res.status(401);
+            res.json({
+                success:false,
+                message:"Incorrect Details"
+            })
+        }
 
-app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    console.log(req.user)
-    id= req.params.id;
-    mysqlConnection.query('Select * from user Where Staff_Id=?', [id], function(error,results,fields){
-        if (results.length > 0){
-            const data = JSON.parse(JSON.stringify(results));
+        //bcrypt function
+        function comparepassword(password, hash, callback){
+            console.log('ordi pass ' + password)
+            console.log('db pass ' + hash)
+            bcrypt.compare(password, hash, (err, isMatch)=>{
+                if (err) throw err
+                callback(null, isMatch)
+                
+            })
+        }
+        
+    })
+
+    //----------------------------------------------------GET ROLE BY ID-----------------------------------------------------
+    app.get('/role/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        id=req.params.staffId;
+        roles=[]
+        if (id){
             mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
                 if (results.length>0){
                     Object.keys(results).forEach(function(key) {
@@ -296,508 +771,32 @@ app.get('/Users/:id', passport.authenticate('jwt', {session:false}), (req,res)=>
                         console.log(row.Role)
                         roles.push(row.Role)
                     });
-                      // add property roles to the user object
-                    data[0].Roles=roles;
+                    // add property roles to the user object
+                    
                     res.status(200);
                     return res.json({
                         success:true,
-                        data   
+                        roles   
                     });
                 }else{
                     res.status(400);
-                    res.json("User not found")
+                    return res.json({
+                        success:false,
+                        message:"User not found"   
+                    });
                 }
             });
-            
-            
         }else{
-            res.status(401);
-            res.json("User details not correct")
+            res.status(409);
+                return res.json({
+                    success:false,
+                    message:"roles not found"   
+                });
         }
+            
     });
 
-
-})
-
-//the url below activates or deactivates a user
-app.put('/status/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    id= req.params.staffId
-    console.log(id)
-    if (id){
-        mysqlConnection.query('Select isActive from user where staff_id=?', [id], function(err,results,fields){
-            console.log(results)
-            if (results.length > 0){
-                isActive=results[0].isActive
-                newIsActive=!isActive
-                mysqlConnection.query('Update user SET isActive=? where staff_id=?', [newIsActive, id], (err)=>{
-                    if (!err){
-                        res.status(200)
-                        res.json({
-                            success:true,
-                            message:"User status updated successfully"
-                        })
-                    }else{
-                        console.log(err)
-                        res.status(400)
-                        res.json({
-                            success:false,
-                            message:"User status not successfully updated"
-                        })
-                    }
-                })
-            }else{
-                res.status(401)
-                res.json("User not found")
-            }
-        })
-       
-    }else{
-        res.status(409)
-        res.json({
-            success:false,
-            message:"Enter correct details"
-        })
-    }
-})
-
-//----------------------------VIEW USERS AND FILTER---------------------------------------------------------------------//
-app.get('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    console.log(req.user)
-    id= req.params.id;
-    let role=req.query.role;
-    let limit=req.query.limit;
-    let isActive=req.query.isActive;
-    if (limit){
-        limit=parseInt(limit)
-        console.log(limit)
-    }else{
-        limit=10
-    }
-    if (isActive){
-        isActive=isActive
-        console.log(isActive)
-
-    }else{
-        isActive=1
-    }
-    if (!role){
-        mysqlConnection.query('select * from user u where u.isActive=? order by u.Date_Created DESC limit ?', [isActive, limit],  function(error,results,fields){
-            console.log(results);
-            if (results.length > 0){
-                const data = JSON.parse(JSON.stringify(results));
-                res.status(200)
-                return res.json({
-                    success:true,
-                    data   
-                });
-            }else{
-                res.status(400);
-            }
-        });
-        
-    }else{
-        console.log(role)
-        mysqlConnection.query('select * from user u, role r, user_role s where r.role_id=s.role_id and s.staff_id=u.staff_id and u.isActive=? and r.role_name=? order by u.Date_Created DESC limit ?', [isActive, role, limit],  function(error,results,fields){
-            console.log(results);
-            if (results.length > 0){
-                const data = JSON.parse(JSON.stringify(results));
-                res.status(200)
-                return res.json({
-                    success:true,
-                    data   
-                });
-    
-                
-                
-            }else{
-                res.status(400);
-            }
-        });
-    }
-    
-
-
-});
-
-app.get('/count/Users', (req,res)=>{
-    mysqlConnection.query('SELECT COUNT(Staff_Id) AS NumberOfUsers FROM user', function(error, results){
-        if (!error){
-            const data = JSON.parse(JSON.stringify(results));
-            res.status(200)
-            res.json({
-            success:true,
-            data
-            })
-        }else{
-            res.status(400);
-            res.json({
-                success:false,
-                message: 'Could not return number of users at this time'
-            })
-        }
-    })
-})
-
-//----------------------------------------UPDATE USERS------------------------------------------------------------------//
-app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    id = req.body.staff_id;
-    username=req.body.username;
-    firstname= req.body.firstname;
-    lastname= req.body.lastname;
-    email= req.body.email;
-    role= req.body.roles; 
-    phonenumber= req.body.phonenumber;
-    
-    if (firstname && lastname && email && phonenumber && role && id && username){
-        mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=? where Staff_Id=?', [firstname, lastname, email, phonenumber, id], (err)=>{
-            // ----------------------------Email update on credential----------------------------
-            if (!err){
-                mysqlConnection.query("update credential SET Email=? where UserName=?",[email,username], (err)=>{
-                    if (!err){
-                        console.log("Email updated");
-                    }else{
-                        console.log(err)
-                    }
-                });
-                //update user roles
-
-                mysqlConnection.query('Delete from user_role where Staff_Id=?', [id], (err)=>{
-                    if (!err){
-                        console.log("Deleted roles successfully")
-                    }else{
-                        console.log(err);
-                    }
-                
-                })
-                for (let j=0; j<role.length; j++){
-                    console.log("here")
-                    console.log(role[j])
-                    rolename=role[j]
-                    mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
-                        if (results.length>0){
-                            console.log(results)
-                            roleId=results[0].role_id
-                            console.log('roleId is ' + roleId)
-                            mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+id+"', '"+roleId+"')", (err)=>{
-                                if (!err){
-                                    console.log("role "+ role[j] + " inserted")
-                                }else{
-                                    console.log("role " + roleId + " not inserted")
-                                }
-                            })
-                           
-                            
-                        }else{
-                            console.log("roles not inserted")
-                        }
-                    }) 
-                } 
-                console.log("user roles added")
-        
-                res.status(200);
-                res.json({
-                    success:true,
-                    message:"user updated"
-
-                });
-                res.end();
-            }
-            else
-                console.log(err);
-        });
-        
-    }else{
-        res.status(400)
-        res.json({
-            success:false,
-            message:"supply correct details"
-        })
-    }
-})
-
-
-//-----------------------------------------------  HANDLING ROLES ------------------------------------------------------//
-app.post('/roles', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    staffId= req.body.staff_id;
-    role=req.body.roles;
-    console.log(staffId)
-    console.log(role);
-    if (role && staffId){
-    mysqlConnection.query('Delete from user_role where Staff_Id=?', [staffId], (err)=>{
-        if (!err){
-            console.log("Deleted roles successfully")
-        }else{
-            console.log(err);
-        }
-    
-    })
-    for (let j=0; j<role.length; j++){
-        console.log("here")
-        console.log(role[j])
-        rolename=role[j]
-        mysqlConnection.query('select role_id from role where role_name=?', [rolename], function(error,results,fields){
-            if (results.length>0){
-                console.log(results)
-                roleId=results[0].role_id
-                console.log('roleId is ' + roleId)
-                mysqlConnection.query("insert into user_role (Staff_Id, Role_Id) values ('"+staffId+"', '"+roleId+"')", (err)=>{
-                    if (!err){
-                        console.log("role "+ role[j] + " inserted")
-                    }else{
-                        console.log("role " + roleId + " not inserted")
-                    }
-                })
-               
-                
-            }else{
-                console.log("roles not inserted")
-            }
-        }) 
-    } res.json({
-        success:true,
-        message:"Role updated"
-    })
-    
-} else{
-    res.json({
-        success:false,
-        message:"Enter the right details"
-    })
-}
-})
-
-//----------------------------------------FORGOT PASSWORD-------------------------------------------------------------//
-app.put('/forgotPassword', (req,res)=>{
-    email= req.body.email;
-    if (email){
-        console.log(email);
-        mysqlConnection.query('select * from credential where Email=?', [email], (err,results)=>{
-            console.log(results);
-            if (results.length>0){
-                console.log("user exists");
-                const randomstring = Math.random().toString(36).slice(-8);
-                password= randomstring;
-                console.log(password)
-                bcrypt.genSalt(10, (err,salt)=> {
-                    bcrypt.hash(password, salt, (err,hash) => {
-                       // console.log(hash)
-                        if (err) throw err;
-                        password=hash;
-                       console.log("password hashed" + password)
-                       mysqlConnection.query("Update credential SET Password=? where email=?", [password,email], (err,results)=>{
-                           if (!err){
-                               res.status(200);
-                               console.log('User Password Updated')
-                                //--------------------------send email----------------------------------------------------------------
-                                let transport = nodemailer.createTransport({
-                                    service: 'gmail',
-                                    auth: {
-                                        // should be replaced with real sender's account
-                                        user: 'oremei.akande@gmail.com',
-                                        pass: 'oremei@akande'
-                                    }
-                                });
-                                let mailOptions = {
-                                    // should be replaced with real  recipient's account
-                                    from: 'noreplyKayar@gmail.com',
-                                    to: 'sumbomatic@gmail.com',
-                                    subject: 'Password Reset',
-                                    text: 'You are receiving this message because you put in for a password reset. With this message is a temporary password. Login in to the site with it and reset your  password afterwards. Your temporary password is  ' + randomstring
-                                };
-                                transport.sendMail(mailOptions, (error, info) => {
-                                    if (error) {
-                                        return console.log(error);
-                                    }
-                                    console.log('Message %s sent: %s', info.messageId, info.response);
-                                    res.json({
-                                        sucess:true,
-                                        message:"User password updated. Check your mail for password",
-                                        data:randomstring
-                                    })
-                                    res.end()
-                                });
-                               
-                           }else{
-                               res.status(400)
-                                res.json({
-                                    sucess:false,
-                                    message:"Password not updated"
-                                })
-                                res.end()
-                           }
-                       });
-                    })
-                });
-
-               
-            }else{
-                res.status(401);
-                res.json({
-                    success:false,
-                    message:"User does not exist"
-                })
-            }
-        })
-    }else{
-        res.status(400);
-        res.json({
-            success:false,
-            message:"Incorrect Details"
-        })
-    }
-})
-
-app.put('/passwordChange', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    username=req.body.username;
-    oldPassword=req.body.oldPassword;
-    password= req.body.newPassword;
-    randomstring=password
-    if (username && password){
-        mysqlConnection.query('select * from credential where UserName=?',[username], (err,results)=>{
-            if (results.length>0){
-                console.log(password)
-                mysqlConnection.query('Select * from credential Where username=?', [username], function(error,results,row){
-                    if (results.length >0 ){
-                        db_password = results[0].Password;
-                        email= results[0].Email;
-                        console.log(results)
-                        comparepassword(oldPassword, db_password, (err, isMatch)=>{
-                            if (err) throw err;
-                            console.log(isMatch)
-                            if (isMatch){
-                                bcrypt.genSalt(10, (err,salt)=> { 
-                                    bcrypt.hash(password, salt, (err,hash) => {
-                                       // console.log(hash)
-                                        if (err) throw err;
-                                        password=hash;
-                                       console.log("password hashed" + password)
-                                       mysqlConnection.query("Update credential SET Password=? where username=?", [password,username], (err,results)=>{
-                                           if (!err){
-                                                //--------------------------send email----------------------------------------------------------------
-                                                let transport = nodemailer.createTransport({
-                                                    service: 'gmail',
-                                                    auth: {
-                                                        // should be replaced with real sender's account
-                                                        user: 'oremei.akande@gmail.com',
-                                                        pass: 'oremei@akande'
-                                                    }
-                                                });
-                                                let mailOptions = {
-                                                // should be replaced with real  recipient's account
-                                                from: 'noreplyKayar@gmail.com',
-                                                to: email,
-                                                subject: 'Password Reset',
-                                                text: 'Voilla!!! Your password was successfully changed. With this message is a temporary password. Your new password is  ' + randomstring
-                                                    };
-                                                transport.sendMail(mailOptions, (error, info) => {
-                                                    if (error) {
-                                                        return console.log(error);
-                                                    }
-                                                    console.log('Message %s sent: %s', info.messageId, info.response);
-                                                    res.status(200)
-                                                    res.json({
-                                                        sucess:true,
-                                                        message:"User password updated. Check your mail for password",
-                                                        data:randomstring
-                                                    })
-                                                    res.end()
-                                                });
-                                           }else{
-                                               res.status(400)
-                                                res.json({
-                                                    sucess:false,
-                                                    message:"Password not updated"
-                                                })
-                                                res.end()
-                                           }
-                                       });
-                                    })
-                                });
-                            }else{
-                                res.status(409)
-                                res.json({
-                                    success:false,
-                                    message:"old password does not match"
-                                })
-                                res.end()
-                            }
-                        })
-                    }else{
-                        res.json({
-                            success:false,
-                            message:"User does not exist"
-                        })
-                        res.end()
-                    }
-                })
-                
-            }else{
-                res.status(401);
-                res.json({
-                    success:false,
-                    message:"user does  not exist"
-                })
-            }
-        })
-    }else{
-        res.status(401);
-        res.json({
-            success:false,
-            message:"Incorrect Details"
-        })
-    }
-
-    //bcrypt function
-    function comparepassword(password, hash, callback){
-        console.log('ordi pass ' + password)
-        console.log('db pass ' + hash)
-        bcrypt.compare(password, hash, (err, isMatch)=>{
-            if (err) throw err
-            callback(null, isMatch)
-            
-        })
-    }
-    
-})
-
-//----------------------------------------------------GET ROLE BY ID-----------------------------------------------------
-app.get('/role/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    id=req.params.staffId;
-    roles=[]
-    if (id){
-        mysqlConnection.query('select r.role_name As Role from user u, role r, user_role s where u.Staff_Id=? and r.role_id=s.role_id and s.staff_id=u.staff_id', [id], function(error,results,fields){
-            if (results.length>0){
-                Object.keys(results).forEach(function(key) {
-                    var row = results[key];
-                    console.log(row.Role)
-                    roles.push(row.Role)
-                });
-                // add property roles to the user object
-                
-                res.status(200);
-                return res.json({
-                    success:true,
-                    roles   
-                });
-            }else{
-                res.status(400);
-                return res.json({
-                    success:false,
-                    message:"User not found"   
-                });
-            }
-        });
-    }else{
-        res.status(409);
-            return res.json({
-                success:false,
-                message:"roles not found"   
-            });
-    }
-        
-});
-
-
+//----------------------------------------------------------------------------user end----------------------------
 //------------------------------------------------------------port handler----------------------------------------------------------------------//
 
 const port = process.env.PORT || 3000
@@ -1341,7 +1340,7 @@ async function getlotSerialNumber(id){
 
 function delay() {
     return new Promise(resolve => setTimeout(resolve, 300));
-  }
+}
   
 async function delayedLog(item,username, requestId, requestStatus, assLocation, comment, responded_by) {
     // notice that we can await a function
@@ -1419,7 +1418,7 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
                 })
                 
             }
-  }
+}
   
 async function processArray(array,username, requestId, requestStatus, assLocation, comment, responded_by) {
     username=username;
@@ -1433,8 +1432,39 @@ async function processArray(array,username, requestId, requestStatus, assLocatio
     }
     console.log('Done!'); 
     return data="success" 
-  }
+}
 
+async function createNotification(subject, body, sender, link_type, link_type_id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{ 
+        const result = await connection.execute("insert into notifications (subject, body, sender, link_type, link_type_id) values ('"+subject+"','"+body+"','"+sender+"','"+link_type+"','"+link_type_id+"')")
+        console.log("notification inserted")
+        console.log(result[0].insertId)
+        data= result[0]
+        return data
+    }catch (err) {
+          
+        console.log(err)
+        return err
+        } 
+    
+}
+async function getAllNotification(limit,is_Read){
+    console.log(is_Read)   
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('SELECT * from notifications where is_read like ? order by date_sent DESC limit ?', [is_Read,limit]);
+        let data= result
+        console.log(data)
+        return data   
+
+    } catch (err) {
+        console.log(err)     
+        return err
+    } 
+}
 
 
 //------------------------------------------------Get Asset ById------------------------------------------------------//
@@ -1442,7 +1472,7 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
     id=req.params.id;
     is_Assigned=req.query.is_Assigned
     //if it has is_assigneed= truue send all asseeets else send those not assigneed
-    if (is_Assigned==1){
+    if (!is_Assigned){
         is_Assigned='%'
     }else{
         is_Assigned='not assigned'
@@ -1902,20 +1932,25 @@ app.put('/category', passport.authenticate('jwt', {session:false}), (req,res)=>{
 app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requested_by=req.body.staffUsername
     comment=req.body.comment
+    if (!comment){
+        comment="no comment"
+    }
     items=req.body.items
+    const request ={}
     console.log(items)
     createRequest(requested_by,comment)
     .then(data=>{
         if (data.insertId){
-            requestId=data.insertId
+            const requestId=data.insertId
+            request.requestId=requestId
             for (let j=0; j<items.length; j++){
                 item_id=items[j].itemId
                 req_quantity=items[j].quantity
         
                 if(requested_by && item_id && req_quantity){
-                    if (!comment){
-                        comment="no comment"
-                    }
+                    // if (!comment){
+                    //     comment="no comment"
+                    // }
                     createitemRequest(requestId,item_id,req_quantity)
                     .then(data=>{
                         if (data.insertId){
@@ -1933,7 +1968,20 @@ app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
                     res.end()
                 }
             }
-        
+            const subject= 'Request for assets';
+            const body= comment
+            const sender= requested_by
+            const link_type= 'item_req'
+            const link_type_id= request.requestId;
+            createNotification(subject, body, sender, link_type, link_type_id)
+            .then(data=>{
+                if (data.insertId){
+                    console.log('Notification inserted')
+                }else{
+                    console.log('Notification not inserted')
+                }
+                
+            })
             res.status(200)
             res.json({
                 success:true,
@@ -2017,7 +2065,7 @@ app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req
     })  
 })
 //=============================================Uppdate assets===================================================
-//================================================================================================================
+//========================================================= =======================================================
 app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{  
     itemDesc= req.body.itemDescription
     itemName=req.body.itemName
@@ -2051,9 +2099,105 @@ app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                         })
                     }
                 })
-            }
+            } 
         })
      
     }
 })
+//=========================================================Notifications=================================================
+app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    limit=req.query.limit
+    is_Read=req.query.is_Read
+    console.log(is_Read)    
+    if (!limit){
+        limit=5;
+    }
+    if (!is_Read){
+        is_Read='%'
+    }
+    getAllNotification(limit,is_Read)
+    .then(data=>{
+        if (data.length>0){
+            let notifications = JSON.parse(JSON.stringify(data[0]));
+            res.status(200)
+            res.json({
+                success:true, 
+                notifications
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"could not fetch notification data"
+            })
+
+        }
+    })
+})
+app.put('/notification/:notificationId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id= req.params.notificationId
+    staffUsername=req.body.staffUsername
+    now=new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0]
+    console.log(id)
+    if (id && staffUsername){
+        mysqlConnection.query('Select is_read from notifications where id=?', [id], function(err,results,fields){
+            console.log(results)
+            if (results.length > 0){
+                isRead=results[0].is_read
+                newIsRead=!isRead
+                if (isRead=='0'){
+                    mysqlConnection.query('Update notifications SET is_read=?, read_by=?, date_read=? where id=?', [newIsRead, staffUsername, now, id], (err)=>{
+                        if (!err){
+                            res.status(200)
+                            res.json({
+                                success:true,
+                                message:"Notification status updated successfully. If newIsRead is false, message has been unread else it has been read",
+                                newIsRead
+                                
+                            })
+                        }else{
+                            console.log(err)
+                            res.status(400)
+                            res.json({
+                                success:false,
+                                message:"Notification status not successfully updated"                     
+                            })
+                        }
+                    })
+                }else{
+                    mysqlConnection.query('Update notifications SET is_read=?, read_by=?, date_read=? where id=?', [newIsRead, '', '0000-00-00:00-00-00', id], (err)=>{
+                        if (!err){
+                            res.status(200)  
+                            res.json({
+                                success:true,
+                                message:"Notification status updated successfully. If newIsRead is false, message has been unread else it has been read",
+                                newIsRead
+                                
+                            })
+                        }else{
+                            console.log(err)
+                            res.status(400)
+                            res.json({
+                                success:false,
+                                message:"Notification status not successfully updated"
+                            })
+                        }
+                    })
+                }
+                
+            }else{
+                res.status(401)
+                res.json("Notification not found")
+            }
+        })
+    
+    }else{
+        res.status(409)
+        res.json({
+            success:false,
+            message:"Enter correct details"
+        })
+    }
+})
+
 
