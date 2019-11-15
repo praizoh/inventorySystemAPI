@@ -872,6 +872,21 @@ async function getCategoryByName(name){
         return err
     } 
 }
+async function getCategoryByItemId(id){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('select * from item_category join category on item_category.Category_Id=category.Category_Id where item_category.Item_Id=?', [id]);
+        console.log(result)
+        let data= result
+        return data
+
+      } catch (err) {
+          
+        console.log(err)
+        return err
+    } 
+}
 async function getAllCategory(){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -910,7 +925,7 @@ async function staffAsset(staff_name){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select * from events where assigned_to=? and is_Leaf=1', [staff_name]);
+        const result =await connection.execute('select * from events e, item i where e.assigned_to=? and e.is_Leaf=1 and e.item_id=i.Item_Id', [staff_name]);
         console.log(result[0])
         let data= result
         return data
@@ -935,12 +950,14 @@ async function updateEvent(id){
     
 }
 
-async function updateRequest(id,status){
+async function updateRequest(id,status, responded_by,qty){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         //const result = await connection.execute('update events SET is_leaf=? where requestId=?',[0,id])
-        let data = await connection.execute('update request SET status=? where id=?',[status,id])
+        now=new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0]
+        let data = await connection.execute('update request SET status=?, responded_by=?, res_date=? where id=?',[status,responded_by,now,id])
+        let result = await connection.execute('update item_request SET qty_granted=? where id=?',[qty,id])
         console.log("update request")
         data="success"
         return data
@@ -965,15 +982,16 @@ async function getEventById(id){
         } 
 }
 
-async function getItemById(id){
+async function getItemById(id, is_Assigned){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     const lot=[]
     try {
-        const result =await connection.execute('select * from events e, item t where e.is_leaf=1 and e.item_id=t.item_id and e.item_id=?', [id]);
+        const result =await connection.execute('select * from events e, item t  where  e.assigned_to Like ? and e.is_leaf=1 and e.item_id=t.item_id and e.item_id=?', [is_Assigned,id]);
         console.log(result[0])
         let data= result
-        if (data.length>0){
+        if (data.length>0){ 
+            //SELECT assigned_to FROM `events` WHERE assigned_to LIKE '%none%' and is_leaf=1
             item = JSON.parse(JSON.stringify(data[0]));
             for (let k=0; k<item.length; k++){
                 await getlotSerialNumber(item[k].id)
@@ -1325,7 +1343,7 @@ function delay() {
     return new Promise(resolve => setTimeout(resolve, 300));
   }
   
-async function delayedLog(item,username, requestId, requestStatus, assLocation, comment) {
+async function delayedLog(item,username, requestId, requestStatus, assLocation, comment, responded_by) {
     // notice that we can await a function
     // that returns a promise
     username=username;
@@ -1333,6 +1351,7 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
     requestStatus=requestStatus;
     assLocation=assLocation;
     comment=comment
+    responded_by=responded_by
     await delay();
     console.log(item.event_id);
             eventId= item.event_id; //id of the lot
@@ -1363,10 +1382,19 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
                                 assignEvent(assign,username)
                                 .then(data=>{ 
                                     if (data=="success"){
-                                        if (requestStatus=="ACCEPTED"){
-                                            updateRequest(requestId,requestStatus)
+                                        console.log('data')
+                                        console.log(data)
+                                        console.log(requestStatus)
+                                        console.log(requestId)
+                                        console.log(responded_by)
+                                        if (requestStatus==="ACCEPTED"){
+                                            updateRequest(requestId,requestStatus,responded_by, assQty)
                                             .then(data=>{
-                                                if (data=="success"){
+                                                console.log(data)
+                                                console.log(requestStatus)
+                                                console.log(requestId)
+                                                console.log(responded_by)
+                                                if (data==="success"){
                                                     console.log("Request updated")
                                                     
                                                 }else{
@@ -1393,14 +1421,15 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
             }
   }
   
-async function processArray(array,username, requestId, requestStatus, assLocation, comment) {
+async function processArray(array,username, requestId, requestStatus, assLocation, comment, responded_by) {
     username=username;
     requestId=requestId;
     requestStatus=requestStatus;
     assLocation=assLocation;
     comment=comment
+    responded_by=responded_by
     for (const item of array) {
-      await delayedLog(item,username, requestId, requestStatus, assLocation, comment);
+      await delayedLog(item,username, requestId, requestStatus, assLocation, comment,responded_by);
     }
     console.log('Done!'); 
     return data="success" 
@@ -1411,9 +1440,16 @@ async function processArray(array,username, requestId, requestStatus, assLocatio
 //------------------------------------------------Get Asset ById------------------------------------------------------//
 app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
     id=req.params.id;
+    is_Assigned=req.query.is_Assigned
+    //if it has is_assigneed= truue send all asseeets else send those not assigneed
+    if (is_Assigned==1){
+        is_Assigned='%'
+    }else{
+        is_Assigned='not assigned'
+    }
     lot={}
     if (id){    
-        getItemById(id)
+        getItemById(id,is_Assigned)
         .then(lot=>{
             if (lot.length>0){
                 res.status(200)
@@ -1553,6 +1589,15 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                             .then(data=>{
                                 if (data[0].length>0){
                                     console.log("Category exists")
+                                    cat_id= JSON.stringify(data[0][0].Category_Id)
+                                    createItem_Category(event.item_id, cat_id)
+                                    .then(data=>{
+                                        if (data.insertId){
+                                            console.log("category_item created")
+                                        }else{
+                                            console.log("category_item not created")
+                                        }
+                                    });
 
                                 }else{
                                     createCategory(category[j])
@@ -1631,10 +1676,12 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
    requestStatus=req.body.requestStatus
    comment=req.body.comment
    assLocation = req.body.location //location of the assigned item or lot
+   responded_by=req.body.storeKeeperUsername
+   console.log(responded_by)
    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
         // processArray(assets, username, requestId, requestStatus, assLocation, comment)
-        console.log(assets, username, requestId, requestStatus, assLocation, comment)
-        processArray(assets, username, requestId, requestStatus, assLocation, comment)
+        console.log(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
+        processArray(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
         .then(data=>{
             if (data=="success"){
                 res.status(200)
@@ -1654,7 +1701,7 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
     }else{
         
         if (requestStatus=="NOT GRANTED" && requestId){
-            updateRequest(requestId,requestStatus)
+            updateRequest(requestId,requestStatus, responded_by)
             .then(data=>{
                 if (data=="success"){
                     res.status(200)
@@ -1683,19 +1730,24 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
    
 })
 //------------------------------------------Staff Asset----------------------------------------------------------------//
-app.get('/Staff/Asset', passport.authenticate('jwt', {session:false}), (req,res)=>{
+app.get('/Staff/Asset/:staffName', passport.authenticate('jwt', {session:false}), (req,res)=>{
     console.log("here")
-    staffName=req.body.staffName;
+    staffName=req.params.staffName;
     console.log(staffName)
     if (staffName){
         staffAsset(staffName)
         .then(data=>{
             if (data.length>0){
-                let item = JSON.parse(JSON.stringify(data[0]));
+                let items = JSON.parse(JSON.stringify(data[0]));
+                NumberOfStaffAsset=0;
+                for (j=0; j<items.length; j++){
+                    NumberOfStaffAsset++
+                }
                 res.status(200)
                 res.json({
                     success:true,
-                    item
+                    items,
+                    NumberOfStaffAsset
                 })
             }else{
                 res.status(400)
@@ -1756,6 +1808,95 @@ app.get('/category', (req,res)=>{
         }
     })
 })
+//======================================Get Categories By AssetId=========================================================
+app.get('/category/:assetId', (req,res)=>{
+    id=req.params.assetId
+    getCategoryByItemId(id)
+    .then(data=>{
+        if (data[0].length>0){
+            let categories = JSON.parse(JSON.stringify(data[0]));
+            console.log(categories)
+            res.status(200),
+            res.json({
+                success:true,
+                categories
+                
+            })
+        }else{
+            res.status(400)
+            res.json({
+                success:false,
+                message:"Could not fetch categories"
+            })
+        }
+    })
+})
+//=================================================Update Asset Cateeegoory======================================
+app.put('/category', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    itemId= req.body.itemId;
+    category=req.body.category;
+    if (category && itemId){
+    mysqlConnection.query('Delete from item_category where Item_Id=?', [itemId], (err)=>{
+        if (!err){
+            console.log("Deleted category successfully")
+        }else{
+            console.log(err);
+        }
+    
+    })
+    for (let j=0; j<category.length; j++){
+        console.log(category[j])
+        getCategoryByName(category[j])
+        .then(data=>{
+            if (data[0].length>0){
+                console.log("Category exists")
+                cat_id= JSON.stringify(data[0][0].Category_Id)
+                createItem_Category(itemId, cat_id)
+                .then(data=>{
+                    if (data.insertId){
+                        console.log("category_item created")
+                    }else{
+                        console.log("category_item not created")
+                    }
+                });
+            }else{
+                createCategory(category[j])
+                .then(data=>{
+                    if (data.insertId){
+                        cat_id=data.insertId
+                        console.log('we herererrer')
+                        createItem_Category(itemId, cat_id)
+                        .then(data=>{
+                            if (data.insertId){
+                                console.log("category_item created")
+                            }else{
+                                console.log("category_item not created")
+                            }
+                        });
+                        
+                        item_cat.push(data.insertId)
+                        console.log("category created")
+                        console.log(item_cat)
+                    }else{
+                        console.log("category not created")
+                    }
+                });
+            }
+        })
+    }
+    res.status(200)
+    res.json({
+        success:true,
+        message:'Category Updated'
+    })
+    
+    } else{
+        res.json({
+            success:false,
+            message:"Enter the right details"
+        })
+    }
+    })
 
 //----------------------------------REQUEST------------------------------------------------------------------------------//
 app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
@@ -1874,5 +2015,45 @@ app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req
             })
         }
     })  
+})
+//=============================================Uppdate assets===================================================
+//================================================================================================================
+app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{  
+    itemDesc= req.body.itemDescription
+    itemName=req.body.itemName
+    category=req.body.category
+    itemId=req.body.itemId
+    
+    if (itemDesc && itemName && itemId && category){
+        getItemByName(itemName)
+        .then(data => {
+            if (data[0].length>0){
+                console.log("item already exists")
+                res.status(400)
+                res.json({
+                    success:false,
+                    message:"Item Name already exists. Pick another Name"
+                })           
+            }else{
+                updateAssetById()
+                .then(data=>{
+                    if (data==success){
+                        res.status(200);
+                        res.json({
+                            success:true,
+                            message:'Asset Updated'
+                        })
+                    }else{
+                        res.status(400)
+                        res.json({
+                            success:false,
+                            meessage:'Asset not updated'
+                        })
+                    }
+                })
+            }
+        })
+     
+    }
 })
 
