@@ -906,13 +906,22 @@ async function createEvent(event){
     if (!event.requestId){
         event.requestId=0
     }
+    
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
-        const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"')")
+        if (event.is_Assigned){
+            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId,is_Assigned) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"', '"+event.is_Assigned +"')")
+            console.log(result)
+            data=result[0]
+            return data
+        }else{
+            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"')")
         console.log(result)
         data=result[0]
         return data
+        }
+        
     }catch (err){
         console.log(err)
         return err
@@ -1193,6 +1202,7 @@ async function assignEvent(event, username){
         event.assigned_to=username
         event.parent_id=event.lastId
         event.type='assign'
+        event.is_Assigned=1
         await createEvent(event)
         .then(data=>{
             if (data.insertId){
@@ -1201,6 +1211,7 @@ async function assignEvent(event, username){
                 console.log("user not assigned")
             }
         });
+        
         await updateEvent(event.lastId)
         .then(result=>{
            if (result){
@@ -1220,14 +1231,15 @@ async function getRequestById(id){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('select * from request r, item_request i  where r.id=i.request_id and r.id=?', [id]);
+        const result =await connection.execute('select * from request r, item_request i, item t  where r.id=i.request_id and i.item_id=t.Item_Id and r.id=?', [id]);
+        // select * from request r, item_request i, item t where r.id=i.request_id and i.item_id=t.Item_Id and r.id=16
         console.log(result[0])
         let data= result
         return data
 
       } catch (err) {
           
-        console.log(err)
+        console.log(err) 
         return err
     } 
 }
@@ -1308,35 +1320,7 @@ async function getlotSerialNumber(id){
         return err
     } 
 }
-//const waitFor = (ms) => new Promise(r => setTimeout(r, ms));
 
-// const  processArray = async (array, username, requestId, requestStatus,assLocation,comment) =>{
-    
-//         username=username;
-//         requestId=requestId;
-//         requestStatus=requestStatus;
-//         assLocation=assLocation;
-//         comment=comment
-//         let data;
-//         const split= await Promise.all(array.map(item=>{ assignSplit(item, username, requestId, requestStatus,assLocation,comment)
-//             console.log("Status =>", split)
-//         })); 
-//         console.log('Done!');    
-//         return data=="success"
-
-
-// }
-// const assignSplit = (item, username, requestId, requestStatus,assLocation,comment) => {  
-
-//     return new Promise(async (resolve,reject) => {
-//           //this is a mock email send logic
-//           setTimeout(() => {
-//             console.log(item.eventId)
-//               resolve(3);
-//           },3000);
-  
-//     })
-//   }
 
 function delay() {
     return new Promise(resolve => setTimeout(resolve, 300));
@@ -1465,7 +1449,21 @@ async function getAllNotification(limit,is_Read){
         return err
     } 
 }
+async function getNotificationById(id){
+     
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('SELECT * from notifications where id=?', [id]);
+        let data= result
+        console.log(data)
+        return data   
 
+    } catch (err) {
+        console.log(err)     
+        return err
+    } 
+}
 
 //------------------------------------------------Get Asset ById------------------------------------------------------//
 app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
@@ -1588,7 +1586,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                     for (let k=0; k<serialNumber.length; k++){
                         createLotSerialNumbers(lotId,serialNumber[k])
                         .then(data=>{
-                            if (data.insertId){
+                            if (data.insertId){ 
                                 console.log("Lots serial number created")
                             }else{
                                 console.log("Lots serial number not created")
@@ -1710,6 +1708,9 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
    console.log(responded_by)
    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
         // processArray(assets, username, requestId, requestStatus, assLocation, comment)
+        if (requestStatus=="Nill Request"){
+            requestId=0
+        }
         console.log(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
         processArray(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
         .then(data=>{
@@ -1760,6 +1761,7 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
    
 })
 //------------------------------------------Staff Asset----------------------------------------------------------------//
+//=============================================getAsset owned by a staff============================================
 app.get('/Staff/Asset/:staffName', passport.authenticate('jwt', {session:false}), (req,res)=>{
     console.log("here")
     staffName=req.params.staffName;
@@ -1797,7 +1799,7 @@ app.get('/Staff/Asset/:staffName', passport.authenticate('jwt', {session:false})
     
 })
 
-//count assets
+//======================================count assets in the system. All is leaf lots============================================================
 app.get('/count/Assets', (req,res)=>{
     mysqlConnection.query('SELECT SUM(quantity) AS NumberOfAssets FROM events where is_leaf=1', function(error, results){
         if (!error){
@@ -1929,6 +1931,7 @@ app.put('/category', passport.authenticate('jwt', {session:false}), (req,res)=>{
     })
 
 //----------------------------------REQUEST------------------------------------------------------------------------------//
+//=============================================post requests====================================================
 app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requested_by=req.body.staffUsername
     comment=req.body.comment
@@ -1997,7 +2000,7 @@ app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
     })
 
 })      
-
+//===========================gets all request======================================================================
 app.get('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
     limit=req.query.limit
     if (!limit){
@@ -2022,7 +2025,7 @@ app.get('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
         }
     })
 })
-
+//===========================================get a request by Id. Contains all assets for a request===============
 app.get('/request/:id',passport.authenticate('jwt', {session:false}), (req,res)=>{
     id=req.params.id;
     getRequestById(id)
@@ -2044,7 +2047,7 @@ app.get('/request/:id',passport.authenticate('jwt', {session:false}), (req,res)=
         }
     })
 })
-
+//=================gives the total count of request made by a staff================================================
 app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req,res)=>{
     id=req.params.id;
     mysqlConnection.query('SELECT COUNT(requested_by) AS NumberOfRequest FROM request where requested_by=?',[id], function(error, results){
@@ -2105,6 +2108,7 @@ app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     }
 })
 //=========================================================Notifications=================================================
+//=============================================get all notifications==============================================
 app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res)=>{
     limit=req.query.limit
     is_Read=req.query.is_Read
@@ -2134,6 +2138,7 @@ app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res
         }
     })
 })
+//================================================update notification when read and who read it-================
 app.put('/notification/:notificationId', passport.authenticate('jwt', {session:false}), (req,res)=>{
     id= req.params.notificationId
     staffUsername=req.body.staffUsername
@@ -2199,5 +2204,73 @@ app.put('/notification/:notificationId', passport.authenticate('jwt', {session:f
         })
     }
 })
+//===============================get Notification By Id=========================================================
+app.get('/notification/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id=req.params.id
+    getNotificationById(id)
+    .then(data=>{
+        if (data.length>0){
+            let notification = JSON.parse(JSON.stringify(data[0]));
+            res.status(200)
+            res.json({
+                success:true, 
+                notification
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"could not fetch notification data"
+            })
 
+        }
+    })
+})
+
+//=================================gets the total number of assigned assets==========================================
+app.get('/assignedAssetCount', (req,res)=>{
+    mysqlConnection.query('SELECT SUM(quantity) AS NumberOfAssignedAssets FROM events where is_leaf=1 and is_assigned=1', function(error, results){
+        if (!error){
+            const data = JSON.parse(JSON.stringify(results));
+            res.status(200)
+            res.json({
+            success:true,
+            data
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message: 'Could not return number of assets at this time'
+            })
+        }
+    })
+})
+
+//====================================get the total number of requests made in the system============================================
+app.get('/requestCount', (req,res)=>{
+    status=req.query.status
+    if (!status){
+        status='%'
+    }else{ 
+        status= status
+    }
+    mysqlConnection.query('SELECT COUNT(id) AS NumberOfRequest FROM request where status like ?',[status], function(error, results){
+        if (!error){
+            const data = JSON.parse(JSON.stringify(results));
+            res.status(200)
+            res.json({
+            success:true,
+            data
+            })
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message: 'Could not return number of requests at this time'
+            })
+        }
+    })  
+    
+})
 
