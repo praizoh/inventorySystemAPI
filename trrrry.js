@@ -1,3 +1,71 @@
+app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    assets=req.body.assets;
+    username=req.body.staff_username //staff to be assigned to
+    requestId=req.body.requestId; 
+    requestStatus=req.body.requestStatus
+    comment=req.body.comment
+    assLocation = req.body.location //location of the assigned item or lot
+    responded_by=req.body.storeKeeperUsername
+    console.log(responded_by)
+    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
+         // processArray(assets, username, requestId, requestStatus, assLocation, comment)
+         if (requestStatus=="Nill Request"){
+             requestId=0
+         }
+         console.log(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
+         processArray(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
+         .then(data=>{
+             if (data=="success"){
+                 console.log('Assets Assigned')
+                 res.status(200)
+                     res.json({
+                     success:true,
+                     message:"Asset assigned successfully"
+                     })
+             
+             }else{
+                 res.status(400)
+                     res.json({
+                     success:false,
+                     message:"Asset not assigned successfully"
+                 })
+             }
+             
+                 
+         
+     }else{
+         
+         if (requestStatus=="NOT GRANTED" && requestId){
+             updateRequest(requestId,requestStatus, responded_by)
+             .then(data=>{
+                 if (data=="success"){
+                     res.status(200)
+                     res.json({
+                         success:true,
+                         message:"Request updated"
+                     })
+                 }else{
+                     res.status(400)
+                     res.json({
+                         success:false,
+                         message:"Request not updated"
+                     })
+                 }
+                 
+             })
+         }else{
+             res.status(401)
+             res.json({
+                 success:false,
+                 message:"Enter correct details"
+             })
+             res.end()
+         }
+  }
+    
+ })
+
+
 async function asignSplit(item, username, requestId, requestStatus,assLocation,comment){
     username=username;
     requestId=requestId;

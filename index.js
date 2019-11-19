@@ -1418,11 +1418,11 @@ async function processArray(array,username, requestId, requestStatus, assLocatio
     return data="success" 
 }
 
-async function createNotification(subject, body, sender, link_type, link_type_id){
+async function createNotification(subject, body, sender, link_type, link_type_id,to){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{ 
-        const result = await connection.execute("insert into notifications (subject, body, sender, link_type, link_type_id) values ('"+subject+"','"+body+"','"+sender+"','"+link_type+"','"+link_type_id+"')")
+        const result = await connection.execute("insert into notifications (subject, body, sender, link_type, link_type_id, recipient) values ('"+subject+"','"+body+"','"+sender+"','"+link_type+"','"+link_type_id+"','"+to+"')")
         console.log("notification inserted")
         console.log(result[0].insertId)
         data= result[0]
@@ -1434,12 +1434,12 @@ async function createNotification(subject, body, sender, link_type, link_type_id
         } 
     
 }
-async function getAllNotification(limit,is_Read){
+async function getAllNotification(limit,is_Read,to){
     console.log(is_Read)   
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('SELECT * from notifications where is_read like ? order by date_sent DESC limit ?', [is_Read,limit]);
+        const result =await connection.execute('SELECT * from notifications where is_read like ? and recipient like ? order by date_sent DESC limit ?', [is_Read,to,limit]);
         let data= result
         console.log(data)
         return data   
@@ -1449,6 +1449,22 @@ async function getAllNotification(limit,is_Read){
         return err
     } 
 }
+async function getAllNotificationCount(is_Read,to){
+    console.log(is_Read)   
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('SELECT COUNT(*) AS NumberOfNotifications from notifications where is_read like ? and recipient like ? order by date_sent DESC', [is_Read,to]);
+        let data= result
+        console.log(data)
+        return data   
+
+    } catch (err) {
+        console.log(err)     
+        return err
+    } 
+}
+// SELECT COUNT(requested_by) AS NumberOfRequest FROM request where requested_by=?'
 async function getNotificationById(id){
      
     const mysql2= require('mysql2/promise');
@@ -1698,68 +1714,85 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
 })
 //------------------------------------------Assign Asset----------------------------------------------------------------//
 app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
-   assets=req.body.assets;
-   username=req.body.staff_username //staff to be assigned to
-   requestId=req.body.requestId; 
-   requestStatus=req.body.requestStatus
-   comment=req.body.comment
-   assLocation = req.body.location //location of the assigned item or lot
-   responded_by=req.body.storeKeeperUsername
-   console.log(responded_by)
-   if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
-        // processArray(assets, username, requestId, requestStatus, assLocation, comment)
-        if (requestStatus=="Nill Request"){
-            requestId=0
-        }
-        console.log(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
-        processArray(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
-        .then(data=>{
-            if (data=="success"){
-                res.status(200)
-                res.json({
-                success:true,
-                message:"Asset assigned successfully"
-            })
-            }else{
-                res.status(400)
-                res.json({
-                success:false,
-                data
-        })
-            }
-        })
-        
-    }else{
-        
-        if (requestStatus=="NOT GRANTED" && requestId){
-            updateRequest(requestId,requestStatus, responded_by)
-            .then(data=>{
-                if (data=="success"){
-                    res.status(200)
-                    res.json({
-                        success:true,
-                        message:"Request updated"
-                    })
-                }else{
-                    res.status(400)
-                    res.json({
-                        success:false,
-                        message:"Request not updated"
-                    })
-                }
-                
-            })
+    assets=req.body.assets;
+    username=req.body.staff_username //staff to be assigned to
+    requestId=req.body.requestId; 
+    requestStatus=req.body.requestStatus
+    comment=req.body.comment
+    assLocation = req.body.location //location of the assigned item or lot
+    responded_by=req.body.storeKeeperUsername
+    console.log(responded_by)
+      //to create notification and return response
+    const subject= 'Assigned Assets';
+    const body= 'Request for assets has been reviewed. '+ comment
+    const sender= responded_by
+    const link_type= 'assign_asset'
+    const to= "username"
+    const link_type_id= requestId;
+    createNotification(subject, body, sender, link_type, link_type_id,to)
+    .then(data=>{
+        if (data.insertId){
+            console.log('Notification inserted')
         }else{
-            res.status(401)
-            res.json({
-                success:false,
-                message:"Enter correct details"
-            })
-            res.end()
+            console.log('Notification not inserted')
         }
- }
-   
-})
+        
+    })
+
+    if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
+         // processArray(assets, username, requestId, requestStatus, assLocation, comment)
+         if (requestStatus=="Nill Request"){
+             requestId=0
+         }
+         console.log(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
+         processArray(assets, username, requestId, requestStatus, assLocation, comment, responded_by)
+         .then(data=>{
+             if (data=="success"){
+                 res.status(200)
+                 res.json({
+                 success:true,
+                 message:"Asset assigned successfully"
+             })
+             }else{
+                 res.status(400)
+                 res.json({
+                 success:false,
+                 data
+         })
+             }
+         })
+         
+     }else{ 
+         
+         if (requestStatus=="NOT GRANTED" && requestId){
+             updateRequest(requestId,requestStatus, responded_by)
+             .then(data=>{
+                 if (data=="success"){
+                     res.status(200) 
+                     res.json({
+                         success:true,
+                         message:"Request updated"
+                     })
+                 }else{
+                     res.status(400)
+                     res.json({
+                         success:false,
+                         message:"Request not updated"
+                     })
+                 }
+                 
+             })
+         }else{
+             res.status(401)
+             res.json({
+                 success:false,
+                 message:"Enter correct details"
+             })
+             res.end()
+         }
+  }
+    
+ })
 //------------------------------------------Staff Asset----------------------------------------------------------------//
 //=============================================getAsset owned by a staff============================================
 app.get('/Staff/Asset/:staffName', passport.authenticate('jwt', {session:false}), (req,res)=>{
@@ -1976,7 +2009,8 @@ app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
             const sender= requested_by
             const link_type= 'item_req'
             const link_type_id= request.requestId;
-            createNotification(subject, body, sender, link_type, link_type_id)
+            const to="storekeeper"
+            createNotification(subject, body, sender, link_type, link_type_id,to)
             .then(data=>{
                 if (data.insertId){
                     console.log('Notification inserted')
@@ -2058,7 +2092,7 @@ app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req
             success:true,
             data
             })
-        }else{
+        }else{ 
             res.status(400);
             res.json({
                 success:false,
@@ -2112,6 +2146,8 @@ app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
 app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res)=>{
     limit=req.query.limit
     is_Read=req.query.is_Read
+    to=req.query.to
+    console.log(to)
     console.log(is_Read)    
     if (!limit){
         limit=5;
@@ -2119,24 +2155,72 @@ app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res
     if (!is_Read){
         is_Read='%'
     }
-    getAllNotification(limit,is_Read)
-    .then(data=>{
-        if (data.length>0){
-            let notifications = JSON.parse(JSON.stringify(data[0]));
-            res.status(200)
-            res.json({
-                success:true, 
-                notifications
-            })
-        }else{
-            res.status(400);
-            res.json({
-                success:false,
-                message:"could not fetch notification data"
-            })
+    if (to){
+        getAllNotification(limit,is_Read, to)
+        .then(data=>{
+            if (data.length>0){
+                let notifications = JSON.parse(JSON.stringify(data[0]));
+                res.status(200)
+                res.json({
+                    success:true, 
+                    notifications
+                })
+            }else{
+                res.status(400);
+                res.json({
+                    success:false,
+                    message:"could not fetch notification data"
+                })
+    
+            }
+        })
+    }else{
+        res.status(400)
+        res.json({
+            success:false,
+            message:"Enter the recipient of this notification"
+        })
+    }
+  
+})
 
-        }
-    })
+//===============================================get the total count of notification===========================
+app.get('/notification/count', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    limit=req.query.limit
+    is_Read=req.query.is_Read
+    to=req.query.to
+    console.log(to)
+    console.log(is_Read)    
+    if (!is_Read){
+        is_Read='%'
+    }
+    if (to){
+        getAllNotificationCount(is_Read, to)
+        .then(data=>{
+            if (data.length>0){
+                let count = JSON.parse(JSON.stringify(data[0]));
+                res.status(200)
+                res.json({
+                    success:true, 
+                    count
+                })
+            }else{
+                res.status(400);
+                res.json({
+                    success:false,
+                    message:"could not fetch notification data"
+                })
+    
+            }
+        })
+    }else{
+        res.status(400)
+        res.json({
+            success:false,
+            message:"Enter the recipient of this notification"
+        })
+    }
+  
 })
 //================================================update notification when read and who read it-================
 app.put('/notification/:notificationId', passport.authenticate('jwt', {session:false}), (req,res)=>{
@@ -2272,5 +2356,73 @@ app.get('/requestCount', (req,res)=>{
         }
     })  
     
+})
+//===============================deAssign An ASSet from a staff=======================================================
+app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (req,res)=>{
+    eventId=req.params.event_id;
+    staff=req.params.staffUsernameToBeDeassigned
+    storeKeeper=req.params.storeKeeperUsername
+      //to create notification and return response
+      const subject= 'Unassigned Asset';
+      const body= 'Asset with id= ' +eventId + ' has been unassigned from you'
+      const sender= storeKeeper
+      const link_type= 'unassign_asset'
+      const to= staff
+      const link_type_id= eventId;
+      createNotification(subject, body, sender, link_type, link_type_id,to)
+      .then(data=>{
+          if (data.insertId){
+              console.log('Notification inserted')
+          }else{
+              console.log('Notification not inserted')
+          }
+          
+      })
+    event={}
+    getEventById(eventId)
+    .then(data=>{
+        if (data.length>0){
+            let requests = JSON.parse(JSON.stringify(data[0][0]));
+            event.item_id=requests.item_id
+            event.quantity=requests.quantity
+            event.type="deassign"
+            event.location=requests.location
+            event.received_by=requests.received_by
+            event.brought_by=requests.brought_by
+            event.assigned_to="not assigned"
+            event.parent_id=eventId
+            createEvent(event)
+            .then(data=>{
+                if (data.insertId){
+                    console.log('insert Id')
+                    console.log(data.insertId)
+                    updateEvent(eventId)
+                    .then(result=>{
+                        console.log(data)
+                        if (result){
+                            res.status(200)
+                            res.json({
+                                success:true,
+                                message:"Asset deassigned"
+                            })
+                        }else{
+                            console.log('dint updATE EVENT')
+                        }
+                    })
+                }else{
+                    console.log('event not created')
+                }
+            })
+
+           
+        }else{
+            res.status(400);
+            res.json({
+                success:false,
+                message:"could not fetch request data"
+            })
+
+        }
+    })
 })
 
