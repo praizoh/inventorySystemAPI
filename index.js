@@ -7,6 +7,10 @@ const bodyparser = require('body-parser');
 const passport = require('passport')
 const path = require('path')
 const nodemailer = require("nodemailer"); 
+
+// app.use(bodyparser.urlencoded({
+//   extended: true
+// }));
 app.use(bodyparser.json());
 const cors = require('cors');
 app.use(cors())
@@ -14,6 +18,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+// const busboy = require("then-busboy");
+ const fileUpload=require('express-fileupload')
+ app.use(fileUpload())
 //Create Connection
 const db = mysql.createConnection({
     host: 'localhost',
@@ -438,17 +445,32 @@ const mysqlConnection = db;
     })
 
     //----------------------------------------UPDATE USERS------------------------------------------------------------------//
-    app.put('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    app.post('/Userss', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        console.log(req.body)
+        console.log(req.body.username)
         id = req.body.staff_id;
         username=req.body.username;
         firstname= req.body.firstname;
         lastname= req.body.lastname;
         email= req.body.email;
-        role= req.body.roles; 
+        role= JSON.parse(req.body.roles);
+        console.log(role) 
         phonenumber= req.body.phonenumber;
-        
+        console.log(phonenumber)
+        //handle images
+        random = Math.random().toString(36).slice(-8);
+           if (!req.files){
+           Image = ""
+           }
+            else{
+                file = req.files.Image;
+                Image = random+req.files.Image.name;
+                file.mv('public/images/users/'+Image);
+                console.log("Image")
+                console.log(Image)
+            }
         if (firstname && lastname && email && phonenumber && role && id && username){
-            mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=? where Staff_Id=?', [firstname, lastname, email, phonenumber, id], (err)=>{
+            mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=?, Image=? where Staff_Id=?', [firstname, lastname, email, phonenumber, Image, id], (err)=>{
                 // ----------------------------Email update on credential----------------------------
                 if (!err){
                     mysqlConnection.query("update credential SET Email=? where UserName=?",[email,username], (err)=>{
@@ -1108,24 +1130,27 @@ async function splitEvent(event){
         assignedId=''
         remId=''
         // getting the serialNumbers of the lot from the item_serialn table
-        await getlotSerialNumber(eventId)
-        .then(data=>{
-            if (data.length>0){
-                JSON.stringify(data[0][0].quantity)
-                for (let k=0; k<data[0].length; k++){
-                    SN= JSON.stringify(data[0][k].serialNumber)
-                    lotSN.push(SN);
-                }
-                compare(lotSN, assignedSerialNumbers)
-                .then(data=>{
-                    //push the remaining serial numbers to remSN array: remainingSerialNumber
-                    for (let k=0; k<data.length; k++){
-                        SN= data[k]
-                        remSN.push(SN);
+        if (assignedSerialNumbers){
+            await getlotSerialNumber(eventId)
+            .then(data=>{
+                if (data.length>0){
+                    JSON.stringify(data[0][0].quantity)
+                    for (let k=0; k<data[0].length; k++){
+                        SN= JSON.stringify(data[0][k].serialNumber)
+                        lotSN.push(SN);
                     }
-                })
-            }
-        })
+                    compare(lotSN, assignedSerialNumbers)
+                    .then(data=>{
+                        //push the remaining serial numbers to remSN array: remainingSerialNumber
+                        for (let k=0; k<data.length; k++){
+                            SN= data[k]
+                            remSN.push(SN);
+                        }
+                    })
+                }
+            })
+        }
+       
         //------continue normal operation on splitting-----
         event1.item_id=event.itemId;
         event1.quantity=event.assQty
@@ -1475,7 +1500,7 @@ async function getNotificationById(id){
         console.log(data)
         return data   
 
-    } catch (err) {
+    } catch (err) {  
         console.log(err)     
         return err
     } 
@@ -1741,6 +1766,7 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
 
     if ((requestStatus=="ACCEPTED" && requestId) || requestStatus=="Nill Request"){
          // processArray(assets, username, requestId, requestStatus, assLocation, comment)
+         console.log("hi")
          if (requestStatus=="Nill Request"){
              requestId=0
          }
@@ -1765,7 +1791,8 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
      }else{ 
          
          if (requestStatus=="NOT GRANTED" && requestId){
-             updateRequest(requestId,requestStatus, responded_by)
+             qty=0
+             updateRequest(requestId,requestStatus, responded_by,qty)
              .then(data=>{
                  if (data=="success"){
                      res.status(200) 
@@ -2018,9 +2045,9 @@ app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
                     console.log('Notification not inserted')
                 }
                 
-            })
-            res.status(200)
-            res.json({
+            }) 
+            res.status(200) 
+            res.json({ 
                 success:true,
                 message:"Request Made"
             })
@@ -2186,7 +2213,7 @@ app.get('/notification', passport.authenticate('jwt', {session:false}), (req,res
 
 //===============================================get the total count of notification===========================
 app.get('/notification/count', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    limit=req.query.limit
+    
     is_Read=req.query.is_Read
     to=req.query.to
     console.log(to)
