@@ -21,6 +21,9 @@ const bcrypt = require('bcrypt');
 // const busboy = require("then-busboy");
  const fileUpload=require('express-fileupload')
  app.use(fileUpload())
+
+ //set static folder
+ app.use(express.static(path.join(__dirname, 'public')));
 //Create Connection
 const db = mysql.createConnection({
     host: 'localhost',
@@ -373,6 +376,11 @@ const mysqlConnection = db;
         let role=req.query.role;
         let limit=req.query.limit;
         let isActive=req.query.isActive;
+        let name=req.query.name;
+        console.log(name)
+        if (!name){
+            name="%"
+        }
         if (limit){
             limit=parseInt(limit)
             console.log(limit)
@@ -387,17 +395,23 @@ const mysqlConnection = db;
             isActive=1
         }
         if (!role){
-            mysqlConnection.query('select * from user u where u.isActive=? order by u.Date_Created DESC limit ?', [isActive, limit],  function(error,results,fields){
+            mysqlConnection.query('select * from user u where u.isActive=? and (u.LastName like "%' +name+'%" or u.FirstName like "%' +name+'%")order by u.Date_Created DESC limit ?', [isActive, limit],  function(error,results,fields){
                 console.log(results);
+                console.log(results.length)
                 if (results.length > 0){
                     const data = JSON.parse(JSON.stringify(results));
                     res.status(200)
-                    return res.json({
+                     res.json({
                         success:true,
                         data   
                     });
-                }else{
+                }else{ 
                     res.status(400);
+                     res.json({
+                        success:false,
+                        message:"Users not found"
+                    })
+                    res.end()
                 }
             });
             
@@ -933,12 +947,12 @@ async function createEvent(event){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         if (event.is_Assigned){
-            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId,is_Assigned) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"', '"+event.is_Assigned +"')")
+            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId,is_Assigned) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.Status+"', '"+event.subDescription+"', '"+event.Comment +"', '"+event.Category +"', '"+event.requestId +"', '"+event.is_Assigned +"')")
             console.log(result)
             data=result[0]
             return data
         }else{
-            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.status+"', '"+event.subDesc+"', '"+event.comment +"', '"+event.category +"', '"+event.requestId +"')")
+            const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.Status+"', '"+event.subDescription+"', '"+event.Comment +"', '"+event.Category +"', '"+event.requestId +"')")
         console.log(result)
         data=result[0]
         return data
@@ -971,6 +985,19 @@ async function updateEvent(id){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         const result = await connection.execute('update events SET is_leaf=? where id=?',[0,id])
+        console.log("update heere")
+        console.log(result)
+        return result
+    }catch (err){
+        return err
+    }
+    
+}
+async function updateEventStatus(id,status){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result = await connection.execute('update events SET Status=? where id=?',[status,id])
         console.log("update heere")
         console.log(result)
         return result
@@ -1063,11 +1090,11 @@ async function getItemByName(itemName){
         } 
 }
 
-async function getAllItems(limit){
+async function getAllItems(limit,name){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where is_leaf=1 GROUP BY item.item_id order by item.Date_Created DESC limit ?', [limit]);
+        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where events.is_leaf=1 and item.Item_Name like "%' + name + '%" GROUP BY item.item_id order by item.Date_Created DESC limit ?', [limit]);
         let data= result
         return data
 
@@ -1548,13 +1575,17 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
 //------------------------------------Get All Asset------------------------------------------------------------------//
 app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     let limit=req.query.limit;
+    name=req.query.itemName
+    if (!name){
+        name="%"
+    }
     if (limit){
         limit=parseInt(limit)
         console.log(limit)
     }else{
         limit=10;
     }  
-    getAllItems(limit)
+    getAllItems(limit, name)
     .then(data=>{
         if (data.length>0){
             let items = JSON.parse(JSON.stringify(data[0]));
@@ -2453,3 +2484,63 @@ app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
     })
 })
 
+//=======================================================Update Assets Status===========================================
+app.put('/Asset/status', passport.authenticate('jwt', {session:false}), (req,res)=>{  
+    itemId=req.body.eventId
+    status=req.body.status
+    comment=req.body.comment
+    getEventById(itemId)
+    .then(data=>{
+        if (data.length>0){
+            console.log("Item exists")
+            let item = JSON.parse(JSON.stringify(data[0][0]));
+            console.log("status")
+            console.log(item.Status)
+            item.Status=status
+            console.log(item.Status)
+            item.parent_id=itemId
+            createEvent(item)
+            .then(data=>{
+                if (data.insertId){
+                    res.status(200)
+                    res.json({
+                        success:true,
+                        message:"Event created for asset status update"
+                    })
+                }else{
+                    res.status(400)
+                    res.json({
+                        success:false,
+                        message:"Event not created for asset status update"
+                    })
+                }
+            })
+            // updateEventStatus(itemId, status)
+            // .then(result=>{
+            //     if (result){
+            //         res.status(200)
+            //         res.json({
+            //             success:true,
+            //             item
+            //         })
+            //     }else{
+            //         res.status(400)
+            //         res.json({
+            //             success:false,
+            //             message:"Asset not updated"
+            //         })
+            //     }
+            // })
+            
+        }else{
+            res.status(400)
+            res.json({
+                success:false,
+                message:"Could not get Item. It doesn't exist"
+            })
+        }
+    })
+    
+    
+   
+})
