@@ -1121,6 +1121,8 @@ async function compare(arr1, arr2){
         return err
         } 
 }
+
+//updates lotId given the serialnumbers and eventId to anew eventId
 async function updateSerialNumber(arr,id, eventId){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
@@ -1131,8 +1133,32 @@ async function updateSerialNumber(arr,id, eventId){
         console.log(eventId)
         for (m=0; m<arr.length; m++){
             sn=arr[m]
+            console.log(sn)
             let data = await connection.execute('update item_serialn SET lotId=? where serialNumber=? and lotId=?',[id,sn, eventId])
         }
+        console.log("update request")
+        data="success"
+        return data
+    }catch (err){
+        return err
+    }
+    
+}
+
+//updates the lotId to a new lotId given the old and new eventId without the serial  numbers
+async function updateLotIdforSerialNumbers(id, eventId){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        console.log('serial')
+        console.log(arr)
+        console.log(id)
+        console.log(eventId)
+        // for (m=0; m<arr.length; m++){
+        //     sn=arr[m]
+        //     console.log(sn)
+            let data = await connection.execute('update item_serialn SET lotId=? where lotId=?',[id,eventId])
+        // }
         console.log("update request")
         data="success"
         return data
@@ -1187,6 +1213,10 @@ async function splitEvent(event){
         event1.brought_by='None'
         event1.assigned_to='not assigned'
         event1.parent_id= event.eventId
+        event1.Status=event.Status
+        event1.Category=event.Category
+        event1.subDescription=event.subDescription
+        event1.Comment=event.Comment
         
         await createEvent(event1)
         .then(data=>{
@@ -1208,7 +1238,10 @@ async function splitEvent(event){
         event2.brought_by='None'
         event2.assigned_to='not assigned'
         event2.parent_id= event.eventId
-        
+        event2.Status=event.Status
+        event2.Category=event.Category
+        event2.subDescription=event.subDescription
+        event2.Comment=event.Comment
         console.log(data)
         await createEvent(event2)
         .then(data=>{
@@ -1279,7 +1312,7 @@ async function assignEvent(event, username){
     }
 }
 
-async function getRequestById(id){
+async function getRequestById(id){ 
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
@@ -1401,13 +1434,19 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
                     if (data.length>0){
                         event.eventId=eventId
                         event.assQty=assQty
-                        event.eventQty= JSON.stringify(data[0][0].quantity)
-                        event.eventLocation= JSON.stringify(data[0][0].location)
+                        event.eventQty= data[0][0].quantity
+                        event.eventLocation= data[0][0].location
+                        console.log("eventLocation")
+                        console.log(event.eventLocation)
                         event.assLocation=assLocation;
                         event.itemId=itemId
+                        event.Status= data[0][0].Status
+                        event.Category=data[0][0].Category
+                        event.subDescription=data[0][0].subDescription
+                        event.Comment=data[0][0].Comment
                         if (itemSN){
                             event.assignedSerialNumbers=itemSN
-                        }
+                        }   
                     
                         // don't forget to add conditionals to compare eventqty and assqty
                         splitEvent(event)
@@ -1633,11 +1672,11 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
         event.received_by=receivedBy
         event.brought_by=broughtBy
         event.assigned_to="None"
-        event.status=status
-        event.category=category
-        event.comment=comment
+        event.Status=status
+        event.Category=category
+        event.Comment=comment
         event.parent_id="Parent Node"
-        event.subDesc=itemDesc
+        event.subDescription=itemDesc
         item={}
         
         item.itemDesc=itemDesc
@@ -1775,6 +1814,9 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requestId=req.body.requestId; 
     requestStatus=req.body.requestStatus
     comment=req.body.comment
+    if (!comment){
+        comment= "Check your dashboard for those that has been assigned to you"
+    }
     assLocation = req.body.location //location of the assigned item or lot
     responded_by=req.body.storeKeeperUsername
     console.log(responded_by)
@@ -1784,7 +1826,7 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
     const sender= responded_by
     const link_type= 'assign_asset'
     const to= "username"
-    const link_type_id= requestId;
+    const link_type_id= requestId; 
     createNotification(subject, body, sender, link_type, link_type_id,to)
     .then(data=>{
         if (data.insertId){
@@ -2416,12 +2458,12 @@ app.get('/requestCount', (req,res)=>{
     
 })
 //===============================deAssign An ASSet from a staff=======================================================
-app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (req,res)=>{
-    eventId=req.params.event_id;
-    staff=req.params.staffUsernameToBeDeassigned
-    storeKeeper=req.params.storeKeeperUsername
+app.post('/unAssign/:event_id',passport.authenticate('jwt', {session:false}), (req,res)=>{
+    eventId=req.params.event_id; 
+    staff=req.body.staffUsernameToBeUnassigned
+    storeKeeper=req.body.storeKeeperUsername
       //to create notification and return response
-      const subject= 'Unassigned Asset';
+      const subject= 'Unassignment of Asset ' + eventId;
       const body= 'Asset with id= ' +eventId + ' has been unassigned from you'
       const sender= storeKeeper
       const link_type= 'unassign_asset'
@@ -2443,12 +2485,16 @@ app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
             let requests = JSON.parse(JSON.stringify(data[0][0]));
             event.item_id=requests.item_id
             event.quantity=requests.quantity
-            event.type="deassign"
+            event.type="Unassign"
             event.location=requests.location
             event.received_by=requests.received_by
             event.brought_by=requests.brought_by
             event.assigned_to="not assigned"
             event.parent_id=eventId
+            event.Status=requests.Status
+            event.Category=requests.Category
+            event.subDescription=requests.subDescription
+            event.Comment="Unassigned by " + storeKeeper
             createEvent(event)
             .then(data=>{
                 if (data.insertId){
@@ -2461,7 +2507,7 @@ app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
                             res.status(200)
                             res.json({
                                 success:true,
-                                message:"Asset deassigned"
+                                message:"Asset Unassigned"
                             })
                         }else{
                             console.log('dint updATE EVENT')
@@ -2469,7 +2515,7 @@ app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
                     })
                 }else{
                     console.log('event not created')
-                }
+                } 
             })
 
            
@@ -2486,9 +2532,10 @@ app.post('/deAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
 
 //=======================================================Update Assets Status===========================================
 app.put('/Asset/status', passport.authenticate('jwt', {session:false}), (req,res)=>{  
-    itemId=req.body.eventId
-    status=req.body.status
-    comment=req.body.comment
+        itemId=req.body.eventId
+        status=req.body.status
+        comment=req.body.comment
+    arr=[]
     getEventById(itemId)
     .then(data=>{
         if (data.length>0){
@@ -2499,14 +2546,40 @@ app.put('/Asset/status', passport.authenticate('jwt', {session:false}), (req,res
             item.Status=status
             console.log(item.Status)
             item.parent_id=itemId
+            item.is_Assigned=item.is_assigned
+            console.log(item.is_Assigned)
+            item.Comment=comment  
+            item.type="Asset Status Update"
+            arr.push(itemId)
             createEvent(item)
             .then(data=>{
                 if (data.insertId){
-                    res.status(200)
-                    res.json({
-                        success:true,
-                        message:"Event created for asset status update"
+                    newId =  data.insertId
+                    updateEvent(itemId)
+                    .then(data=>{
+                        if (data){
+                            console.log("Event created")
+                            
+                        }else{
+                            console.log("Event for asset status update not created")
+                        }
                     })
+                    console.log(arr, newId, itemId)
+                   updateLotIdforSerialNumbers(newId, itemId)
+                   .then(data=>{
+                       if (data=="success"){
+                           console.log("Serial Number Updated")
+                           res.status(200)
+                            res.json({
+                                success:true,
+                                message:"Event created for asset status update"
+                            })
+                       }else{
+                           console.log(data)
+                           console.log("serial Numbers not updated")
+                       }
+                   })
+                    
                 }else{
                     res.status(400)
                     res.json({
@@ -2515,22 +2588,7 @@ app.put('/Asset/status', passport.authenticate('jwt', {session:false}), (req,res
                     })
                 }
             })
-            // updateEventStatus(itemId, status)
-            // .then(result=>{
-            //     if (result){
-            //         res.status(200)
-            //         res.json({
-            //             success:true,
-            //             item
-            //         })
-            //     }else{
-            //         res.status(400)
-            //         res.json({
-            //             success:false,
-            //             message:"Asset not updated"
-            //         })
-            //     }
-            // })
+            
             
         }else{
             res.status(400)
