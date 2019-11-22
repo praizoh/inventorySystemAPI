@@ -7,7 +7,10 @@ const bodyparser = require('body-parser');
 const passport = require('passport')
 const path = require('path')
 const nodemailer = require("nodemailer"); 
+const fs = require('fs');
 
+// require paparse
+const papaparse= require("papaparse")
 // app.use(bodyparser.urlencoded({
 //   extended: true
 // }));
@@ -459,7 +462,7 @@ const mysqlConnection = db;
     })
 
     //----------------------------------------UPDATE USERS------------------------------------------------------------------//
-    app.post('/Userss', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    app.post('/Users', passport.authenticate('jwt', {session:false}), (req,res)=>{
         console.log(req.body)
         console.log(req.body.username)
         id = req.body.staff_id;
@@ -835,7 +838,7 @@ const mysqlConnection = db;
 //----------------------------------------------------------------------------user end----------------------------
 //------------------------------------------------------------port handler----------------------------------------------------------------------//
 
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 5000
 
 app.listen(port, ()=> console.log(`listening on port ${port}...`));
 
@@ -912,6 +915,22 @@ async function getCategoryByItemId(id){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item_category join category on item_category.Category_Id=category.Category_Id where item_category.Item_Id=?', [id]);
+        console.log(result)
+        let data= result
+        return data
+
+      } catch (err) {
+          
+        console.log(err)
+        return err
+    } 
+}
+async function getCatItemByCatIdItemId(catId,itemId){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        const result =await connection.execute('select * from item_category where item_category.Category_Id=? and item_category.Item_Id=?', [catId,itemId]);
+        console.log("-----------------------------------------------------------------------------------------------")
         console.log(result)
         let data= result
         return data
@@ -1121,24 +1140,62 @@ async function compare(arr1, arr2){
         return err
         } 
 }
-
-//updates lotId given the serialnumbers and eventId to anew eventId
-async function updateSerialNumber(arr,id, eventId){
+async function processUpdateSerialNumberArray(array,id,eventId) {
+    id=id
+    eventId=eventId
+    for (const item of array) {
+      await delayedUpdateSN(item,id,eventId);
+    }
+    console.log('Done!');
+    data='success'
+    return data
+}
+async function delayedUpdateSN(item,id, eventId){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
-        console.log('serial')
-        console.log(arr)
-        console.log(id)
-        console.log(eventId)
-        for (m=0; m<arr.length; m++){
-            sn=arr[m]
-            console.log(sn)
-            let data = await connection.execute('update item_serialn SET lotId=? where serialNumber=? and lotId=?',[id,sn, eventId])
+       
+        
+            let result = await connection.execute('update item_serialn SET lotId=? where serialNumber=? and lotId=?',[id,item, eventId])
+            console.log(result)
+            data='success'
+            return data
+        
+    }catch (err){
+        return err
+    }
+    
+}
+async function UpdateSN(newId, eventId){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+       
+        
+            let result = await connection.execute('update item_serialn SET lotId=? where  lotId=?',[newId, eventId])
+            console.log(result)
+            data='success'
+            return data
+        
+    }catch (err){
+        return err
+    }
+    
+}
+//updates lotId given the serialnumbers and eventId to anew eventId
+async function updateSerialNumber(arr,id, eventId){
+    id=id
+    eventId=eventId
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        procUpdate= await processUpdateSerialNumberArray(arr,id,eventId)
+        if (procUpdate=='success'){
+            console.log("update request")
+            data="success"
+            return data
         }
-        console.log("update request")
-        data="success"
-        return data
+        
     }catch (err){
         return err
     }
@@ -1184,24 +1241,24 @@ async function splitEvent(event){
         remId=''
         // getting the serialNumbers of the lot from the item_serialn table
         if (assignedSerialNumbers){
-            await getlotSerialNumber(eventId)
-            .then(data=>{
-                if (data.length>0){
-                    JSON.stringify(data[0][0].quantity)
-                    for (let k=0; k<data[0].length; k++){
-                        SN= JSON.stringify(data[0][k].serialNumber)
+            lotgetSN= await getlotSerialNumber(eventId)
+            
+                if (lotgetSN.length>0){
+                    JSON.stringify(lotgetSN[0][0].quantity)
+                    for (let k=0; k<lotgetSN[0].length; k++){
+                        SN= JSON.stringify(lotgetSN[0][k].serialNumber)
                         lotSN.push(SN);
                     }
-                    compare(lotSN, assignedSerialNumbers)
-                    .then(data=>{
+                    lotCompare= await compare(lotSN, assignedSerialNumbers)
+                    
                         //push the remaining serial numbers to remSN array: remainingSerialNumber
-                        for (let k=0; k<data.length; k++){
-                            SN= data[k]
+                        for (let k=0; k<lotCompare.length; k++){
+                            SN= lotCompare[k]
                             remSN.push(SN);
                         }
-                    })
+                    
                 }
-            })
+           
         }
        
         //------continue normal operation on splitting-----
@@ -1288,14 +1345,21 @@ async function assignEvent(event, username){
         event.parent_id=event.lastId
         event.type='assign'
         event.is_Assigned=1
-        await createEvent(event)
-        .then(data=>{
-            if (data.insertId){
+        eveCreate= await createEvent(event)
+        
+            if (eveCreate.insertId){
                 console.log('assigned successfully')
+                SNupdateHere=await UpdateSN(eveCreate.insertId,event.lastId)
+                if (SNupdateHere=='success'){
+                    console.log("new serial number updated")
+                }else{
+                    console.log("new serial number not updated")
+                }
             }else{
                 console.log("user not assigned")
             }
-        });
+        
+
         
         await updateEvent(event.lastId)
         .then(result=>{
@@ -1429,46 +1493,46 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
             console.log(eventId, assQty, itemId, itemSN)
             event={}
             if (eventId && assQty){
-                getEventById(eventId)
-                .then(data=>{
-                    if (data.length>0){
+                getEvent= await getEventById(eventId)
+                
+                    if (getEvent.length>0){
                         event.eventId=eventId
                         event.assQty=assQty
-                        event.eventQty= data[0][0].quantity
-                        event.eventLocation= data[0][0].location
+                        event.eventQty= getEvent[0][0].quantity
+                        event.eventLocation= getEvent[0][0].location
                         console.log("eventLocation")
                         console.log(event.eventLocation)
                         event.assLocation=assLocation;
                         event.itemId=itemId
-                        event.Status= data[0][0].Status
-                        event.Category=data[0][0].Category
-                        event.subDescription=data[0][0].subDescription
-                        event.Comment=data[0][0].Comment
+                        event.Status= getEvent[0][0].Status
+                        event.Category=getEvent[0][0].Category
+                        event.subDescription=getEvent[0][0].subDescription
+                        event.Comment=getEvent[0][0].Comment
                         if (itemSN){
                             event.assignedSerialNumbers=itemSN
                         }   
                     
                         // don't forget to add conditionals to compare eventqty and assqty
-                        splitEvent(event)
-                        .then(data=>{
-                            if (data.length>0){ 
-                                assign=data[0]
-                                assignEvent(assign,username)
-                                .then(data=>{ 
-                                    if (data=="success"){
+                        eventSplit= await splitEvent(event)
+                        
+                            if (eventSplit.length>0){ 
+                                assign=eventSplit[0]
+                                eventAssign= await assignEvent(assign,username)
+                               
+                                    if (eventAssign=="success"){
                                         console.log('data')
-                                        console.log(data)
+                                        console.log(eventAssign)
                                         console.log(requestStatus)
                                         console.log(requestId)
                                         console.log(responded_by)
                                         if (requestStatus==="ACCEPTED"){
-                                            updateRequest(requestId,requestStatus,responded_by, assQty)
-                                            .then(data=>{
-                                                console.log(data)
+                                            requestUpdate= await updateRequest(requestId,requestStatus,responded_by, assQty)
+                                            
+                                                console.log(requestUpdate)
                                                 console.log(requestStatus)
                                                 console.log(requestId)
                                                 console.log(responded_by)
-                                                if (data==="success"){
+                                                if (requestUpdate==="success"){
                                                     console.log("Request updated")
                                                     
                                                 }else{
@@ -1476,21 +1540,21 @@ async function delayedLog(item,username, requestId, requestStatus, assLocation, 
                                                 
                                                 }
                                                 
-                                            })
+                                            
                                         }
                                         
                                     }
-                                })
+                                
                             }else{
                                 console.log("Asset not assigned")
                                 
                             }
-                        })
+                        
                     }else{
                         console.log("Event not found")
                         
                     }
-                })
+                
                 
             }
 }
@@ -1571,6 +1635,193 @@ async function getNotificationById(id){
         return err
     } 
 }
+async function processCsvArray(array) {
+    for (const item of array) {
+      await assetsLog(item);
+    }
+    console.log('Done!'); 
+    return data="success" 
+}
+async function processSerialNumberArray(lotId, serialNumber) {
+    lotId=lotId
+    for (const item of serialNumber) {
+        
+      await delayedSerialNumber(lotId,item);
+    }
+    console.log('Done!');
+    data="success"
+    return data
+}
+async function delayedSerialNumber(lotId,item){
+    lotId=lotId
+    await delay()
+    await createLotSerialNumbers(lotId,item)
+        .then(data=>{
+            if (data.insertId){ 
+                console.log("Lots serial number created")
+            }else{
+                console.log("Lots serial number not created")
+            }
+        })
+}
+async function processCategoryArray(category,id) {
+    id=id
+    console.log(id)
+    console.log("category")
+    console.log(category)
+    for (const item of category) {
+
+            console.log(item)
+      await delayedCategory(item,id);
+    }
+    console.log('Done!');
+    data="success"
+    return data
+}
+async function delayedCategory(item,id){
+    await delay()
+        getCategoryByName(item)
+        .then(data=>{
+            if (data[0].length>0){
+                console.log("Category exists")
+                cat_id= JSON.stringify(data[0][0].Category_Id)
+                getCatItemByCatIdItemId(cat_id,id)
+                .then(data=>{
+                    if (data[0].length>0){
+                        console.log("category Item EXits")
+                    }else{
+                        createItem_Category(event.item_id, cat_id)
+                        .then(data=>{
+                            if (data.insertId){
+                                console.log("category_item created")
+                            }else{
+                                console.log("category_item not created")
+                            }
+                        });
+                    }
+                })
+                
+
+            }else{
+                createCategory(item)
+                .then(data=>{
+                    if (data.insertId){
+                        cat_id=data.insertId
+                        console.log('we herererrer')
+                        createItem_Category(event.item_id, cat_id)
+                        .then(data=>{
+                            if (data.insertId){
+                                console.log("category_item created")
+                            }else{
+                                console.log("category_item not created")
+                            }
+                        });
+                        
+                        item_cat.push(data.insertId)
+                        console.log("category created")
+                        console.log(item_cat)
+                    }else{
+                        console.log("category not created")
+                    }
+                });
+            }
+        })
+    
+}
+async function assetsLog(item){
+    await delay();
+    console.log(item);
+    itemDesc= item.Description
+    itemName=item.Name
+    quantity= item.Quantity
+    location=item.Location
+    receivedBy= item.ReceivedBy
+    broughtBy=item.BroughtBy
+    status=item.Status
+    category=item.Category
+    comment=item.Comment
+    serialNumber=item.SerialNumber
+    if (comment=="" || !comment){
+        comment="no comment"
+    }else{
+        comment=comment
+    }
+    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && category){
+        type='add'
+        event={}
+        event.type=type;
+        event.quantity=quantity
+        event.location=location
+        event.received_by=receivedBy
+        event.brought_by=broughtBy
+        event.assigned_to="not assigned"
+        event.Status=status
+        event.Category=category
+        event.Comment=comment
+        event.parent_id="Parent Node"
+        event.subDescription=itemDesc
+        item={}
+        
+        item.itemDesc=itemDesc
+        item.itemName=itemName
+        item_cat=[]
+        
+        
+        name= await getItemByName(itemName)
+        if (name[0].length>0){
+            console.log("item already exists")
+            const id= JSON.stringify(name[0][0].Item_Id)
+            event.item_id= id;
+            console.log(event.item_id)
+            eventCreate= await createEvent(event)
+            if (eventCreate.insertId){
+                lotId=data.insertId
+                SN= await processSerialNumberArray(lotId,serialNumber)
+                if (SN=="success"){
+                    console.log("created successfully")
+                }else{
+                    console.log("Not created successfully: SERIALNUMBERS")
+                }
+                console.log("item created")
+            }else{
+                console.log("iitem not created")
+            }
+            //add category and insert category_item
+            cat= processCategoryArray(category,id)
+            if (cat=="success"){
+                console.log('Category created')
+            }
+        }else{
+            const itemCreate= await createItem(item)
+            if (itemCreate.insertId){
+                create_id=itemCreate.insertId
+                event.item_id=itemCreate.insertId
+                //add category and insert category_item
+                procCat=await processCategoryArray(category,create_id)
+                if (procCat=='success'){
+                    console.log('Category created')
+                }
+                creEvent=await createEvent(event)
+                if (creEvent.insertId){
+                    lotId=creEvent.insertId
+                    procSerial= processSerialNumberArray(lotId,serialNumber)
+                    if (procSerial=='success'){
+                        console.log("Lots serial number created")
+                    }else{
+                        console.log("Lots serial number not created")
+                    }
+                    console.log("item lot created")
+                }else{
+                    console.log("item lot not created")
+                }
+            }else{
+                console.log("item lot not created")
+            }
+        }                 
+    }else{
+       console.log("correct values should be entered")
+    }
+}
 
 //------------------------------------------------Get Asset ById------------------------------------------------------//
 app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=>{
@@ -1647,103 +1898,89 @@ app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
 
 //-----------------------------------------------Create Asset---------------------------------------------------------//
 app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{  
-    itemDesc= req.body.itemDescription
-    itemName=req.body.itemName
-    quantity= req.body.quantity
-    location=req.body.location
-    receivedBy= req.body.receivedBy
-    broughtBy=req.body.broughtBy
-    status=req.body.status
-    category=req.body.category
-    
-    comment=req.body.comment
-    serialNumber=req.body.serialNumber
-    if (comment=="" || !comment){
-        comment="no comment"
-    }else{
-        comment=comment
-    }
-    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && category){
-        type='add'
-        event={}
-        event.type=type;
-        event.quantity=quantity
-        event.location=location
-        event.received_by=receivedBy
-        event.brought_by=broughtBy
-        event.assigned_to="None"
-        event.Status=status
-        event.Category=category
-        event.Comment=comment
-        event.parent_id="Parent Node"
-        event.subDescription=itemDesc
-        item={}
-        
-        item.itemDesc=itemDesc
-        item.itemName=itemName
-        item_cat=[]
-        
-        getItemByName(itemName)
-        .then(data => {
-            if (data[0].length>0){
-                console.log("item already exists")
-                id= JSON.stringify(data[0][0].Item_Id)
-                event.item_id= id;
-                console.log(event.item_id)
-                createEvent(event)
+    console.log(req.body)
+    if (!req.files){ 
+        itemDesc= req.body.itemDescription
+        itemName=req.body.itemName
+        quantity= req.body.quantity
+        location=req.body.location
+        receivedBy= req.body.receivedBy
+        broughtBy=req.body.broughtBy
+        status=req.body.status
+        category=req.body.category
+        comment=req.body.comment
+        serialNumber=req.body.serialNumber
+        if (comment=="" || !comment){
+            comment="no comment"
+        }else{
+            comment=comment
+        }
+            if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && category){
+                type='add'
+                event={}
+                event.type=type;
+                event.quantity=quantity
+                event.location=location
+                event.received_by=receivedBy
+                event.brought_by=broughtBy
+                event.assigned_to="not assigned"
+                event.Status=status
+                event.Category=category
+                event.Comment=comment
+                event.parent_id="Parent Node"
+                event.subDescription=itemDesc
+                item={}
+                
+                item.itemDesc=itemDesc
+                item.itemName=itemName
+                item_cat=[]
+                
+                getItemByName(itemName)
                 .then(data => {
-                if (data.insertId){
-                    lotId=data.insertId
-                    for (let k=0; k<serialNumber.length; k++){
-                        createLotSerialNumbers(lotId,serialNumber[k])
-                        .then(data=>{
-                            if (data.insertId){ 
-                                console.log("Lots serial number created")
-                            }else{
-                                console.log("Lots serial number not created")
+                    if (data[0].length>0){
+                        console.log("item already exists")
+                        id= JSON.stringify(data[0][0].Item_Id)
+                        event.item_id= id;
+                        console.log(event.item_id)
+                        createEvent(event)
+                        .then(data => {
+                        if (data.insertId){
+                            lotId=data.insertId
+                            for (let k=0; k<serialNumber.length; k++){
+                                createLotSerialNumbers(lotId,serialNumber[k])
+                                .then(data=>{
+                                    if (data.insertId){ 
+                                        console.log("Lots serial number created")
+                                    }else{
+                                        console.log("Lots serial number not created")
+                                    }
+                                })
                             }
-                        })
-                    }
-                    res.json({
-                        success:true,
-                        message:"Item created"
-                    })
-                }else{
-                    res.status(400)
-                    res.json({
-                        success:false,
-                        message:"Item not created"
-                    })
-                }
-                }); 
-            }else{
-                createItem(item)
-                .then(data => {
-                    if (data.insertId){
-                        event.item_id=data.insertId
-                    //add category and insert category_item
-                        for (let j=0; j<category.length; j++){
-                            console.log(category[j])
-                            getCategoryByName(category[j])
-                            .then(data=>{
-                                if (data[0].length>0){
-                                    console.log("Category exists")
-                                    cat_id= JSON.stringify(data[0][0].Category_Id)
-                                    createItem_Category(event.item_id, cat_id)
+                            res.json({
+                                success:true,
+                                message:"Item created"
+                            })
+                        }else{
+                            res.status(400)
+                            res.json({
+                                success:false,
+                                message:"Item not created"
+                            })
+                        }
+                        }); 
+                    }else{
+                        createItem(item)
+                        .then(data => {
+                            if (data.insertId){
+                                event.item_id=data.insertId
+                            //add category and insert category_item
+                                for (let j=0; j<category.length; j++){
+                                    console.log(category[j])
+                                    getCategoryByName(category[j])
                                     .then(data=>{
-                                        if (data.insertId){
-                                            console.log("category_item created")
-                                        }else{
-                                            console.log("category_item not created")
-                                        }
-                                    });
-
-                                }else{
-                                    createCategory(category[j])
-                                    .then(data=>{
-                                        if (data.insertId){
-                                            cat_id=data.insertId
-                                            console.log('we herererrer')
+                                        if (data[0].length>0){
+                                            console.log("Category exists")
+                                            cat_id= JSON.stringify(data[0][0].Category_Id)
                                             createItem_Category(event.item_id, cat_id)
                                             .then(data=>{
                                                 if (data.insertId){
@@ -1752,58 +1989,96 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                                                     console.log("category_item not created")
                                                 }
                                             });
-                                            
-                                            item_cat.push(data.insertId)
-                                            console.log("category created")
-                                            console.log(item_cat)
+        
                                         }else{
-                                            console.log("category not created")
-                                        }
-                                    });
-                                }
-                            })
-                        }
-                       
-                        createEvent(event)
-                        .then(data => {
-                            if (data.insertId){
-                                lotId=data.insertId
-                                for (let k=0; k<serialNumber.length; k++){
-                                    createLotSerialNumbers(lotId,serialNumber[k])
-                                    .then(data=>{
-                                        if (data.insertId){
-                                            console.log("Lots serial number created")
-                                        }else{
-                                            console.log("Lots serial number not created")
+                                            createCategory(category[j])
+                                            .then(data=>{
+                                                if (data.insertId){
+                                                    cat_id=data.insertId
+                                                    console.log('we herererrer')
+                                                    createItem_Category(event.item_id, cat_id)
+                                                    .then(data=>{
+                                                        if (data.insertId){
+                                                            console.log("category_item created")
+                                                        }else{
+                                                            console.log("category_item not created")
+                                                        }
+                                                    });
+                                                    
+                                                    item_cat.push(data.insertId)
+                                                    console.log("category created")
+                                                    console.log(item_cat)
+                                                }else{
+                                                    console.log("category not created")
+                                                }
+                                            });
                                         }
                                     })
                                 }
-                                res.json({
-                                    success:true,
-                                    message:"Item created"
-                                })
+                            
+                                createEvent(event)
+                                .then(data => {
+                                    if (data.insertId){
+                                        lotId=data.insertId
+                                        for (let k=0; k<serialNumber.length; k++){
+                                            createLotSerialNumbers(lotId,serialNumber[k])
+                                            .then(data=>{
+                                                if (data.insertId){
+                                                    console.log("Lots serial number created")
+                                                }else{
+                                                    console.log("Lots serial number not created")
+                                                }
+                                            })
+                                        }
+                                        res.json({
+                                            success:true,
+                                            message:"Item created"
+                                        })
+                                    }else{
+                                        //res.status(400)
+                                        console.log("item lot not created")
+                                    }
+                                }); 
                             }else{
-                                //res.status(400)
-                                console.log("item lot not created")
+                                res.status(400)
+                                res.json({
+                                    success:false,
+                                    message:"Item not created"
+                                })
                             }
                         }); 
-                    }else{
-                        res.status(400)
-                        res.json({
-                            success:false,
-                            message:"Item not created"
-                        })
                     }
-                }); 
+                });
+            }else{
+                res.status(400)
+                res.json({
+                    success:false,
+                    message:'Enter correct details please'
+                })
             }
-        });
-    }else{
-        res.status(400)
-        res.json({
-            success:false,
-            message:'Enter correct details please'
-        })
-    }
+        }else{           
+            file=req.files.csvDoc
+            // console.log(file)
+            // console.log('file') 
+            array=req.body.assets
+            processCsvArray(array)
+            .then(data=>{
+                if (data=="success"){
+                    res.status(200)
+                    res.json({
+                        success:true,
+                        message:"Assets created"
+                    })
+                }else{
+                    res.json({
+                        success:false,
+                        message:"Assets not creeated"
+                    })
+                }
+            })
+        
+        }
+    
      
     
 })
@@ -2431,6 +2706,36 @@ app.get('/assignedAssetCount', (req,res)=>{
     })
 })
 
+//=======================================get lots ======================================================================
+app.get('/lot', (req,res)=>{
+    is_Assigned=req.query.is_Assigned
+    if (!is_Assigned){
+        res.status(200)
+        res.json({
+        success:true,
+        message:"isAssigned or not assigned"
+        })
+    }else{
+        mysqlConnection.query('SELECT *  FROM events,item where is_leaf=1 and is_assigned=? and events.item_id=item.Item_Id',[is_Assigned], function(error, results){
+            if (!error){
+                const data = JSON.parse(JSON.stringify(results));
+                res.status(200)
+                res.json({
+                success:true,
+                data
+                })
+            }else{
+                res.status(400);
+                res.json({
+                    success:false,
+                    message: 'Could not return assigned assets at this time'
+                })
+            }
+        })
+    }
+    
+})
+
 //====================================get the total number of requests made in the system============================================
 app.get('/requestCount', (req,res)=>{
     status=req.query.status
@@ -2500,6 +2805,16 @@ app.post('/unAssign/:event_id',passport.authenticate('jwt', {session:false}), (r
                 if (data.insertId){
                     console.log('insert Id')
                     console.log(data.insertId)
+                    //change the SN to new eventId 
+                    UpdateSN(data.insertId,eventId)
+                    .then(data=>{
+                        if (data=='success'){
+                            console.log("new serial number updated")
+                        }else{
+                            console.log("new serial number not updated")
+                        }
+                    })
+                    
                     updateEvent(eventId)
                     .then(result=>{
                         console.log(data)
@@ -2555,6 +2870,14 @@ app.put('/Asset/status', passport.authenticate('jwt', {session:false}), (req,res
             .then(data=>{
                 if (data.insertId){
                     newId =  data.insertId
+                    UpdateSN(newId,itemId)
+                    .then(data=>{
+                        if (data=='success'){
+                            console.log("new serial number updated")
+                        }else{
+                            console.log("new serial number not updated")
+                        }
+                    })
                     updateEvent(itemId)
                     .then(data=>{
                         if (data){
