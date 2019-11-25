@@ -122,46 +122,35 @@ const mysqlConnection = db;
                                 if (!err){
 
                                     //--------------------------send email----------------------------------------------------------------
-                                    let transport = nodemailer.createTransport({
-                                        host: 'smtp.mailtrap.io',
-                                        port: 25,
-                                        secure: false,
-                                        
+                                     //--------------------------send email----------------------------------------------------------------
+                                     let transport = nodemailer.createTransport({
+                                        service: 'gmail',
                                         auth: {
                                             // should be replaced with real sender's account
-                                            user: '90d97788acb6ef',
-                                            pass: 'e9fe5491a68bc7'
+                                            user: 'oremei.akande@gmail.com',
+                                            pass: 'oremei@akande'
                                         }
                                     });
                                     let mailOptions = {
                                         // should be replaced with real  recipient's account
                                         from: 'noreplyKayar@gmail.com',
-                                        to: 'oremei.akande@gmail.com',
-                                        subject: 'Login Password',
-                                        text: 'Your Passsword is ' + randomstring
+                                        to: email,
+                                        subject: 'New Generated Password for KAYAR',
+                                        text: 'You are receiving this message because you have been registered in Kayar. With this message is a temporary password. Login in to the site with it and reset your  password afterwards. Your temporary password is  ' + randomstring
                                     };
                                     transport.sendMail(mailOptions, (error, info) => {
                                         if (error) {
                                             return console.log(error);
                                         }
+                                        // console.log('Message %s sent: %s', info.messageId, info.response);
+                                       
                                         console.log('Message %s sent: %s', info.messageId, info.response);
-                                        res.status(201);
-                                        res.json({
-                                            sucess:true,
-                                            message:"User password updated",
-                                            data:randomstring
-                                        })
+                                        res.status(201)
+                                        res.send("user created")
+                                        console.log("user created")
                                         res.end()
                                     });
-                                
-
-
-
-
-                                    res.status(201)
-                                    res.send("user created")
-                                    console.log("user created")
-                                    res.end()
+                                    
 
                                 }
                                 else
@@ -1595,7 +1584,7 @@ async function getAllNotification(limit,is_Read,to){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT * from notifications where is_read like ? and recipient like ? order by date_sent DESC limit ?', [is_Read,to,limit]);
-        let data= result
+        let data= result 
         console.log(data)
         return data   
 
@@ -1735,18 +1724,41 @@ async function assetsLog(item){
     itemName=item.Name
     quantity= item.Quantity
     location=item.Location
-    receivedBy= item.ReceivedBy
+    receivedBy= item.ReceivedBy 
     broughtBy=item.BroughtBy
     status=item.Status
-    category=item.Category
+    cat=item.Category
     comment=item.Comment
-    serialNumber=item.SerialNumber
+    serialNumbers=item.SerialNumber
+    category=[]
+    serialNumber=[]
+    console.log(item.Description,item.Name,item.Quantity,item.Location,item.ReceivedBy,item.BroughtBy,item.Status,item.Category,item.Comment,item.SerialNumber)
     if (comment=="" || !comment){
         comment="no comment"
     }else{
         comment=comment
     }
-    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && category){
+    if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && cat){
+        //---------------------------------putting the string for category in array--------------------------------------------------------------
+        console.log("---category ---------------------------------------------------------------------------------------------------")
+        console.log(cat)
+        originalString=cat
+        seperatedArray = originalString.split(',');
+        for (j=0; j<seperatedArray.length;j++){
+            category.push(seperatedArray[j])
+            console.log(seperatedArray[j])
+        }
+        console.log("--seperatedArray for category------------================================================================----------------------")
+        console.log(serialNumbers)
+        originalSerialNumber=serialNumbers
+        seperatedSerialNumberArray=originalSerialNumber.split(',')
+        for (j=0; j<seperatedSerialNumberArray.length;j++){
+            serialNumber.push(seperatedSerialNumberArray[j])
+            console.log(seperatedSerialNumberArray[j])
+        }
+        console.log('new serial number array===========================================================================')
+        console.log(seperatedSerialNumberArray)
+        serialNumber=seperatedSerialNumberArray;
         type='add'
         event={}
         event.type=type;
@@ -1821,6 +1833,27 @@ async function assetsLog(item){
     }else{
        console.log("correct values should be entered")
     }
+}
+async function parseDataHere(content){
+    // console.log(is_Read)   
+    // const mysql2= require('mysql2/promise');
+    // const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try {
+        parseContent = await   papaparse.parse(content,  {   
+                                header:true, 
+                                dynamicTyping:true,
+                                complete: function(results) {
+                                    console.log("Finished:", results.data);   
+                                    data=results.data
+                                }
+                                });
+        // console.log(data)
+        return data
+
+    } catch (err) {
+        console.log(err)     
+        return err
+    } 
 }
 
 //------------------------------------------------Get Asset ById------------------------------------------------------//
@@ -2058,25 +2091,37 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
             }
         }else{           
             file=req.files.csvDoc
-            // console.log(file)
-            // console.log('file') 
-            array=req.body.assets
-            processCsvArray(array)
+            if (file){
+                
+            file=file.data.toString()
+            console.log(file)
+            console.log('file') 
+            // array=req.body.assets
+            parseDataHere(file)
             .then(data=>{
-                if (data=="success"){
-                    res.status(200)
-                    res.json({
-                        success:true,
-                        message:"Assets created"
+                if (data.length>0){
+                    console.log(data)
+                    processCsvArray(data)
+                    .then(data=>{
+                        if (data=="success"){
+                            res.status(200)
+                            res.json({
+                                success:true,
+                                message:"Assets created"
+                            })
+                        }else{
+                            res.json({
+                                success:false,
+                                message:"Assets not creeated"     
+                            })
+                        }
                     })
-                }else{
-                    res.json({
-                        success:false,
-                        message:"Assets not creeated"
-                    })
+                
+                    
                 }
             })
-        
+            }
+            
         }
     
      
@@ -2253,6 +2298,7 @@ app.get('/category/:assetId', (req,res)=>{
     id=req.params.assetId
     getCategoryByItemId(id)
     .then(data=>{
+        console.log(data)
         if (data[0].length>0){
             let categories = JSON.parse(JSON.stringify(data[0]));
             console.log(categories)
@@ -2267,7 +2313,7 @@ app.get('/category/:assetId', (req,res)=>{
             res.json({
                 success:false,
                 message:"Could not fetch categories"
-            })
+            }) 
         }
     })
 })
