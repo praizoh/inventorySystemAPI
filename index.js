@@ -218,7 +218,11 @@ const mysqlConnection = db;
                                                             
                                                             token:"JWT " + token,
                                                             roleId:data[0].Roles,
-                                                            Staff_Id:data[0].Staff_Id
+                                                            Staff_Id:data[0].Staff_Id,
+                                                            Username:data[0].UserName,
+                                                            FirstName:data[0].FirstName,
+                                                            Lastname:data[0].LastName
+                                            
                                                         });
                                                 }else {
                                                     res.status(401)
@@ -961,7 +965,7 @@ async function createEvent(event){
             return data
         }else{
             const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.Status+"', '"+event.subDescription+"', '"+event.Comment +"', '"+event.Category +"', '"+event.requestId +"')")
-        console.log(result)
+        // console.log(result)
         data=result[0]
         return data
         }
@@ -1086,7 +1090,7 @@ async function getItemByName(itemName){
     try {
         const result =await connection.execute('select * from item where item_Name=?', [itemName]);
         //console.log(JSON.stringify(result[0][0].Item_Id))
-        console.log(result)
+        // console.log(result)
         //console.log(JSON.stringify(result[0]))
         let data= result
         return data
@@ -1433,13 +1437,13 @@ async function createLotSerialNumbers(lotId, serialNum){
     try{
         const result= await connection.execute("insert into item_serialn(lotId,serialNumber) values ('"+lotId+"', '"+serialNum+"')");
         
-               console.log(result)
-                data=result[0]
-                return data
+        // console.log(result)
+        data=result[0]
+        return data
            
         
     }catch (err){
-        console.log(err)
+        console.log('err for creating sn_lot is '+ err)
         return err
     }
     
@@ -1647,9 +1651,10 @@ async function delayedSerialNumber(lotId,item){
     await createLotSerialNumbers(lotId,item)
         .then(data=>{
             if (data.insertId){ 
-                console.log("Lots serial number created")
+                console.log("Lots serial number created2 with insertId of "+ data.insertId)
             }else{
-                console.log("Lots serial number not created")
+                console.log("Lots serial number not created2")
+                console.log(data)
             }
         })
 }
@@ -1669,7 +1674,7 @@ async function processCategoryArray(category,id) {
 }
 async function delayedCategory(item,id){
     await delay()
-        getCategoryByName(item)
+        await getCategoryByName(item)
         .then(data=>{
             if (data[0].length>0){
                 console.log("Category exists")
@@ -1719,7 +1724,7 @@ async function delayedCategory(item,id){
 }
 async function assetsLog(item){
     await delay();
-    console.log(item);
+    // console.log(item);
     itemDesc= item.Description
     itemName=item.Name
     quantity= item.Quantity
@@ -1736,25 +1741,32 @@ async function assetsLog(item){
     if (comment=="" || !comment){
         comment="no comment"
     }else{
-        comment=comment
+        comment=comment 
     }
     if (itemDesc && itemName && quantity && location && broughtBy && status && receivedBy && cat){
         //---------------------------------putting the string for category in array--------------------------------------------------------------
         console.log("---category ---------------------------------------------------------------------------------------------------")
-        console.log(cat)
+        // console.log(cat)
         originalString=cat
         seperatedArray = originalString.split(',');
         for (j=0; j<seperatedArray.length;j++){
             category.push(seperatedArray[j])
-            console.log(seperatedArray[j])
+            // console.log(seperatedArray[j])
         }
-        console.log("--seperatedArray for category------------================================================================----------------------")
-        console.log(serialNumbers)
+        console.log(category)
+        // console.log("--seperatedArray for category------------================================================================----------------------")
+        // console.log(serialNumbers)
         originalSerialNumber=serialNumbers
+        // TO CHECK IF THE SERIALnUMBER IS A NUMBER OR STRING
+        if (isNaN(originalSerialNumber)){
+            console.log('not a number. We fine') 
+        }else{
+            originalSerialNumber=originalSerialNumber.toString()
+        }
         seperatedSerialNumberArray=originalSerialNumber.split(',')
         for (j=0; j<seperatedSerialNumberArray.length;j++){
             serialNumber.push(seperatedSerialNumberArray[j])
-            console.log(seperatedSerialNumberArray[j])
+            // console.log(seperatedSerialNumberArray[j])
         }
         console.log('new serial number array===========================================================================')
         console.log(seperatedSerialNumberArray)
@@ -1784,7 +1796,8 @@ async function assetsLog(item){
             console.log("item already exists")
             const id= JSON.stringify(name[0][0].Item_Id)
             event.item_id= id;
-            console.log(event.item_id)
+            console.log('id with which the item exits is ' + id)
+            // console.log(event.item_id)
             eventCreate= await createEvent(event)
             if (eventCreate.insertId){
                 lotId=data.insertId
@@ -1806,28 +1819,29 @@ async function assetsLog(item){
         }else{
             const itemCreate= await createItem(item)
             if (itemCreate.insertId){
-                create_id=itemCreate.insertId
+                id=itemCreate.insertId
                 event.item_id=itemCreate.insertId
                 //add category and insert category_item
-                procCat=await processCategoryArray(category,create_id)
-                if (procCat=='success'){
+                cat= processCategoryArray(category,event.item_id)
+                if (cat=="success"){
                     console.log('Category created')
                 }
-                creEvent=await createEvent(event)
-                if (creEvent.insertId){
-                    lotId=creEvent.insertId
-                    procSerial= processSerialNumberArray(lotId,serialNumber)
-                    if (procSerial=='success'){
-                        console.log("Lots serial number created")
+                //add category and insert category_item
+                eventCreate= await createEvent(event)
+                if (eventCreate.insertId){
+                    lotId=eventCreate.insertId
+                    SN= await processSerialNumberArray(lotId,serialNumber)
+                    if (SN=="success"){
+                        console.log("created successfully")
                     }else{
-                        console.log("Lots serial number not created")
+                        console.log("Not created successfully: SERIALNUMBERS")
                     }
-                    console.log("item lot created")
-                }else{
-                    console.log("item lot not created")
+                    console.log("item created")
                 }
+            
+                    
             }else{
-                console.log("item lot not created")
+                    console.log("item lot not created")
             }
         }                 
     }else{
@@ -1965,7 +1979,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                 item={}
                 
                 item.itemDesc=itemDesc
-                item.itemName=itemName
+                item.itemName=itemName 
                 item_cat=[]
                 
                 getItemByName(itemName)
@@ -1975,6 +1989,54 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                         id= JSON.stringify(data[0][0].Item_Id)
                         event.item_id= id;
                         console.log(event.item_id)
+                        for (let j=0; j<category.length; j++){
+                            console.log(category[j])
+                            getCategoryByName(category[j])
+                            .then(data=>{     
+                                if (data[0].length>0){
+                                    console.log("Category exists")
+                                    cat_id= JSON.stringify(data[0][0].Category_Id)
+                                    getCatItemByCatIdItemId(cat_id,id)
+                                    .then(data=>{
+                                        if (data[0].length>0){
+                                            console.log("category Item EXits")
+                                        }else{
+                                            createItem_Category(event.item_id, cat_id)
+                                            .then(data=>{
+                                                if (data.insertId){
+                                                    console.log("category_item created")
+                                                }else{
+                                                    console.log("category_item not created")
+                                                }
+                                            });
+                                        }
+                                    })
+
+                                }else{
+                                    createCategory(category[j])
+                                    .then(data=>{
+                                        if (data.insertId){
+                                            cat_id=data.insertId
+                                            console.log('we herererrer')
+                                            createItem_Category(event.item_id, cat_id)
+                                            .then(data=>{
+                                                if (data.insertId){
+                                                    console.log("category_item created")
+                                                }else{
+                                                    console.log("category_item not created")
+                                                }
+                                            });
+                                            
+                                            item_cat.push(data.insertId)
+                                            console.log("category created")
+                                            console.log(item_cat)
+                                        }else{
+                                            console.log("category not created")
+                                        }
+                                    });
+                                }
+                            })
+                        }
                         createEvent(event)
                         .then(data => {
                         if (data.insertId){
@@ -1983,7 +2045,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
                                 createLotSerialNumbers(lotId,serialNumber[k])
                                 .then(data=>{
                                     if (data.insertId){ 
-                                        console.log("Lots serial number created")
+                                        console.log("Lots serial number created") 
                                     }else{
                                         console.log("Lots serial number not created")
                                     }
@@ -2094,12 +2156,13 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
             if (file){
                 
             file=file.data.toString()
-            console.log(file)
-            console.log('file') 
+            // console.log(file)
+            // console.log('file') 
             // array=req.body.assets
             parseDataHere(file)
             .then(data=>{
                 if (data.length>0){
+                    console.log('data to be worked on')
                     console.log(data)
                     processCsvArray(data)
                     .then(data=>{
@@ -2135,18 +2198,23 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
     requestStatus=req.body.requestStatus
     comment=req.body.comment
     if (!comment){
-        comment= "Check your dashboard for those that has been assigned to you"
+        comment= "Check your dashboard for assets that has been assigned to you"
     }
     assLocation = req.body.location //location of the assigned item or lot
     responded_by=req.body.storeKeeperUsername
     console.log(responded_by)
       //to create notification and return response
     const subject= 'Assigned Assets';
-    const body= 'Request for assets has been reviewed. '+ comment
+    // const body= 'Request for assets has been reviewed. '+ comment
     const sender= responded_by
     const link_type= 'assign_asset'
-    const to= "username"
-    const link_type_id= requestId; 
+    const to= username
+    const link_type_id= requestId;
+    if (requestStatus=="Nill Request") {
+         body=  comment
+    }else{
+         body= 'Request for assets has been reviewed. '+ comment
+    }
     createNotification(subject, body, sender, link_type, link_type_id,to)
     .then(data=>{
         if (data.insertId){
@@ -2317,6 +2385,7 @@ app.get('/category/:assetId', (req,res)=>{
         }
     })
 })
+
 //=================================================Update Asset Cateeegoory======================================
 app.put('/category', passport.authenticate('jwt', {session:false}), (req,res)=>{
     itemId= req.body.itemId;
@@ -2808,9 +2877,9 @@ app.get('/requestCount', (req,res)=>{
     })  
     
 })
-//===============================deAssign An ASSet from a staff=======================================================
-app.post('/unAssign/:event_id',passport.authenticate('jwt', {session:false}), (req,res)=>{
-    eventId=req.params.event_id; 
+//============================== unAn ASSet from a staff=======================================================
+app.post('/unAssign',passport.authenticate('jwt', {session:false}), (req,res)=>{
+    eventId=req.body.event_id; 
     staff=req.body.staffUsernameToBeUnassigned
     storeKeeper=req.body.storeKeeperUsername
       //to create notification and return response
