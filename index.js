@@ -8,6 +8,8 @@ const passport = require('passport')
 const path = require('path')
 const nodemailer = require("nodemailer"); 
 const fs = require('fs');
+// package use to transform json to csv string
+const stringify = require('csv-stringify');
 
 // require paparse
 const papaparse= require("papaparse")
@@ -545,8 +547,42 @@ const mysqlConnection = db;
             })
         }
     })
-
-
+// ======================Update User Image=======================================================================================
+    app.post('/Users/Image', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        id=req.body.staffId
+        random = Math.random().toString(36).slice(-8);
+        if (!req.files){
+            Image = ""
+            }
+            else{
+                file = req.files.Image;
+                Image = random+req.files.Image.name;
+                file.mv('public/images/users/'+Image);
+                console.log("Image")
+                console.log(Image)
+            }
+        
+        // if (file){
+            mysqlConnection.query('update user SET Image=? where Staff_Id=?', [Image,id], (err)=>{
+                if (!err){
+                    console.log("Image  updated");
+                    res.status(200)
+                    res.json({
+                        success:true,
+                        message:'Image added to staff'
+                    })
+                }else{
+                    console.log(err)
+                    res.status(400)
+                    res.json({
+                        success:false,
+                        message:'Image not added to staff'
+                    })
+                }
+            })
+        // }else{
+        // }
+    })
     //-----------------------------------------------  HANDLING ROLES ------------------------------------------------------//
     app.post('/roles', passport.authenticate('jwt', {session:false}), (req,res)=>{
         staffId= req.body.staff_id;
@@ -831,7 +867,7 @@ const mysqlConnection = db;
 //----------------------------------------------------------------------------user end----------------------------
 //------------------------------------------------------------port handler----------------------------------------------------------------------//
 
-const port = process.env.PORT || 5000
+const port = process.env.PORT || 8083    
 
 app.listen(port, ()=> console.log(`listening on port ${port}...`));
 
@@ -1002,6 +1038,20 @@ async function updateEvent(id){
         return result
     }catch (err){
         return err
+    }
+    
+}
+async function updateAssetById(itemDesc,itemName,itemId){
+    const mysql2= require('mysql2/promise');
+    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
+    try{
+        const result = await connection.execute('update item SET Item_Desc=?, Item_Name=? where Item_Id=?',[itemDesc,itemName, itemId])
+        // console.log("update heere")
+        // console.log(result)
+        data='success'
+        return data
+    }catch (err){
+        return err 
     }
     
 }
@@ -1910,9 +1960,10 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
     
 })
 //------------------------------------Get All Asset------------------------------------------------------------------//
-app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
+app.get('/Assets', (req,res)=>{
     let limit=req.query.limit;
     name=req.query.itemName
+    typeMedia=req.query.typeMedia;
     if (!name){
         name="%"
     }
@@ -1926,12 +1977,31 @@ app.get('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
     .then(data=>{
         if (data.length>0){
             let items = JSON.parse(JSON.stringify(data[0]));
-            res.status(200),
-            res.json({
-                success:true,
-                items
-                
-            })
+            if (typeMedia){
+                // Convert back to CSV  
+                // var csv = papaparse.unparse(items, {header:true, columns:true, newline: "\n"})
+                 // adding appropriate headers, so browsers can start downloading
+                // file as soon as this request starts to get served
+                res.setHeader('Content-Type', 'text/csv');
+                res.setHeader('Content-Disposition', 'attachment; filename=\"' + 'download-' + Date.now() + '.csv\"');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Pragma', 'no-cache');   
+                var csv =stringify(data[0], { header: true })           
+                .pipe(res);         
+                itemsCsv=csv
+                res.status(200) 
+                // res.send(
+                //      res 
+                // ) 
+            }else{          
+                res.status(200),
+                res.json({
+                    success:true, 
+                    items
+                    
+                })
+            }
+            
         }else{
             res.status(400)
             res.json({
@@ -1950,7 +2020,7 @@ app.post('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{
         itemDesc= req.body.itemDescription
         itemName=req.body.itemName
         quantity= req.body.quantity
-        location=req.body.location
+        location=req.body.location 
         receivedBy= req.body.receivedBy
         broughtBy=req.body.broughtBy
         status=req.body.status
@@ -2269,7 +2339,7 @@ app.post('/Assign', passport.authenticate('jwt', {session:false}), (req,res)=>{
                      })
                  }
                  
-             })
+             })  
          }else{
              res.status(401)
              res.json({
@@ -2591,32 +2661,55 @@ app.get('/request/staff/:id',passport.authenticate('jwt', {session:false}), (req
         }
     })  
 })
-//=============================================Uppdate assets===================================================
+//=============================================Update assets===================================================
 //========================================================= =======================================================
 app.put('/Assets', passport.authenticate('jwt', {session:false}), (req,res)=>{  
     itemDesc= req.body.itemDescription
     itemName=req.body.itemName
-    category=req.body.category
+    console.log(itemName)
     itemId=req.body.itemId
     
-    if (itemDesc && itemName && itemId && category){
+    if (itemDesc && itemName && itemId){
         getItemByName(itemName)
         .then(data => {
-            if (data[0].length>0){
-                console.log("item already exists")
-                res.status(400)
-                res.json({
-                    success:false,
-                    message:"Item Name already exists. Pick another Name"
-                })           
-            }else{
-                updateAssetById()
-                .then(data=>{
-                    if (data==success){
+            console.log('data')
+            console.log(data[0])     
+            if (data[0].length>0){ [0]    
+                console.log(data[0][0].Item_Id)               
+                console.log(itemId)
+                if (data[0][0].Item_Id==itemId){ 
+                    updateAssetById(itemDesc, itemName, itemId)
+                    .then(data=>{  
+                        if (data=='success'){
+                            res.status(200);
+                            res.json({
+                                success:true,
+                                message:'Assets Updated'
+                            })
+                        }else{
+                            res.status(400)
+                            res.json({
+                                success:false,
+                                meessage:'Asset not updated'
+                            })
+                        }
+                    })
+                }else{
+                    console.log('item name exits with another Id')
+                    res.status(400)
+                            res.json({
+                                success:false,
+                                meessage:'Asset not updated'
+                            })
+                }         
+            }else{ 
+                updateAssetById(itemDesc, itemName, itemId)
+                .then(data=>{  
+                    if (data=='success'){
                         res.status(200);
                         res.json({
                             success:true,
-                            message:'Asset Updated'
+                            message:'Assets Updated'
                         })
                     }else{
                         res.status(400)
@@ -2803,6 +2896,7 @@ app.get('/notification/:id', passport.authenticate('jwt', {session:false}), (req
 
 //=================================gets the total number of assigned assets==========================================
 app.get('/assignedAssetCount', (req,res)=>{
+    console.log(req)
     mysqlConnection.query('SELECT SUM(quantity) AS NumberOfAssignedAssets FROM events where is_leaf=1 and is_assigned=1', function(error, results){
         if (!error){
             const data = JSON.parse(JSON.stringify(results));
@@ -2877,7 +2971,7 @@ app.get('/requestCount', (req,res)=>{
     })  
     
 })
-//============================== unAn ASSet from a staff=======================================================
+//============================== unAssign ASSet from a staff=======================================================
 app.post('/unAssign',passport.authenticate('jwt', {session:false}), (req,res)=>{
     eventId=req.body.event_id; 
     staff=req.body.staffUsernameToBeUnassigned
