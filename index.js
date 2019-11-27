@@ -1152,11 +1152,11 @@ async function getItemByName(itemName){
         } 
 }
 
-async function getAllItems(limit,name){
+async function getAllItems(name){
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
-        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where events.is_leaf=1 and item.Item_Name like "%' + name + '%" GROUP BY item.item_id order by item.Date_Created DESC limit ?', [limit]);
+        const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where events.is_leaf=1 and item.Item_Name like "%' + name + '%" GROUP BY item.item_id order by item.Date_Created DESC',);
         let data= result
         return data
 
@@ -1385,7 +1385,7 @@ async function assignEvent(event, username){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         event.assigned_to=username
-        event.parent_id=event.lastId
+        event.parent_id=event.lastId 
         event.type='assign'
         event.is_Assigned=1
         eveCreate= await createEvent(event)
@@ -1724,52 +1724,52 @@ async function processCategoryArray(category,id) {
 }
 async function delayedCategory(item,id){
     await delay()
-        await getCategoryByName(item)
-        .then(data=>{
-            if (data[0].length>0){
+        getCatByName= await getCategoryByName(item)
+         
+            if (getCatByName[0].length>0){
                 console.log("Category exists")
-                cat_id= JSON.stringify(data[0][0].Category_Id)
-                getCatItemByCatIdItemId(cat_id,id)
-                .then(data=>{
-                    if (data[0].length>0){
+                cat_id= JSON.stringify(getCatByName[0][0].Category_Id)
+                getCatItemByCatId= await getCatItemByCatIdItemId(cat_id,id)
+                
+                    if (getCatItemByCatId[0].length>0){
                         console.log("category Item EXits")
                     }else{
-                        createItem_Category(event.item_id, cat_id)
-                        .then(data=>{
-                            if (data.insertId){
+                        createItemCategory= await createItem_Category(event.item_id, cat_id)
+                        
+                            if (createItemCategory.insertId){
                                 console.log("category_item created")
                             }else{
-                                console.log("category_item not created")
+                                console.log("category_item not created") 
                             }
-                        });
+                        
                     }
-                })
+                
                 
 
             }else{
-                createCategory(item)
-                .then(data=>{
-                    if (data.insertId){
-                        cat_id=data.insertId
+                const createCat= await createCategory(item)
+                
+                    if (createCat.insertId){
+                        cat_id=createCat.insertId
                         console.log('we herererrer')
-                        createItem_Category(event.item_id, cat_id)
-                        .then(data=>{
-                            if (data.insertId){
+                        createItemCategory= await createItem_Category(event.item_id, cat_id)
+                        
+                            if (createItemCategory.insertId){
                                 console.log("category_item created")
                             }else{
                                 console.log("category_item not created")
                             }
-                        });
                         
-                        item_cat.push(data.insertId)
+                        
+                        item_cat.push(createCat.insertId)   
                         console.log("category created")
                         console.log(item_cat)
                     }else{
                         console.log("category not created")
                     }
-                });
+                
             }
-        })
+        
     
 }
 async function assetsLog(item){
@@ -1807,20 +1807,29 @@ async function assetsLog(item){
         // console.log("--seperatedArray for category------------================================================================----------------------")
         // console.log(serialNumbers)
         originalSerialNumber=serialNumbers
-        // TO CHECK IF THE SERIALnUMBER IS A NUMBER OR STRING
-        if (isNaN(originalSerialNumber)){
-            console.log('not a number. We fine') 
+        // TO CHECK IF  SERIALnUMBER
+        if (!originalSerialNumber){
+            console.log("No serial Number")
         }else{
-            originalSerialNumber=originalSerialNumber.toString()
+            // TO CHECK IF THE SERIALnUMBER IS A NUMBER OR STRING
+            if (isNaN(originalSerialNumber)){
+                console.log('not a number. We fine') 
+            }else{
+                originalSerialNumber=originalSerialNumber.toString()
+            }
+            seperatedSerialNumberArray=originalSerialNumber.split(',')
+            for (j=0; j<seperatedSerialNumberArray.length;j++){
+                serialNumber.push(seperatedSerialNumberArray[j])
+                // console.log(seperatedSerialNumberArray[j])
+            }
+            console.log('new serial number array===========================================================================')
+            console.log(seperatedSerialNumberArray) 
+            serialNumber=seperatedSerialNumberArray;
         }
-        seperatedSerialNumberArray=originalSerialNumber.split(',')
-        for (j=0; j<seperatedSerialNumberArray.length;j++){
-            serialNumber.push(seperatedSerialNumberArray[j])
-            // console.log(seperatedSerialNumberArray[j])
-        }
-        console.log('new serial number array===========================================================================')
-        console.log(seperatedSerialNumberArray)
-        serialNumber=seperatedSerialNumberArray;
+        
+        
+        
+        
         type='add'
         event={}
         event.type=type;
@@ -1846,33 +1855,37 @@ async function assetsLog(item){
             console.log("item already exists")
             const id= JSON.stringify(name[0][0].Item_Id)
             event.item_id= id;
-            console.log('id with which the item exits is ' + id)
+            console.log('id with which the item exists is ' + id)
+            //add category and insert category_item
+            cat= await processCategoryArray(category,id)
+            if (cat=="success"){
+                console.log('Category created')
+            }
             // console.log(event.item_id)
             eventCreate= await createEvent(event)
             if (eventCreate.insertId){
                 lotId=data.insertId
-                SN= await processSerialNumberArray(lotId,serialNumber)
-                if (SN=="success"){
-                    console.log("created successfully")
-                }else{
-                    console.log("Not created successfully: SERIALNUMBERS")
-                }
-                console.log("item created")
+                if (originalSerialNumber){
+                    SN= await processSerialNumberArray(lotId,serialNumber)
+                    if (SN=="success"){
+                        console.log("created successfully")
+                    }else{
+                        console.log("Not created successfully: SERIALNUMBERS") 
+                    }
+                    console.log("item created")
+                    }
+                
             }else{
                 console.log("iitem not created")
             }
-            //add category and insert category_item
-            cat= processCategoryArray(category,id)
-            if (cat=="success"){
-                console.log('Category created')
-            }
+            
         }else{
             const itemCreate= await createItem(item)
             if (itemCreate.insertId){
                 id=itemCreate.insertId
                 event.item_id=itemCreate.insertId
                 //add category and insert category_item
-                cat= processCategoryArray(category,event.item_id)
+                cat= await processCategoryArray(category,event.item_id)   
                 if (cat=="success"){
                     console.log('Category created')
                 }
@@ -1880,13 +1893,16 @@ async function assetsLog(item){
                 eventCreate= await createEvent(event)
                 if (eventCreate.insertId){
                     lotId=eventCreate.insertId
-                    SN= await processSerialNumberArray(lotId,serialNumber)
-                    if (SN=="success"){
-                        console.log("created successfully")
-                    }else{
-                        console.log("Not created successfully: SERIALNUMBERS")
+                    if (originalSerialNumber){
+                        SN= await processSerialNumberArray(lotId,serialNumber)
+                        if (SN=="success"){
+                            console.log("created successfully")
+                        }else{
+                            console.log("Not created successfully: SERIALNUMBERS")
+                        }
+                        console.log("item created")
                     }
-                    console.log("item created")
+                    
                 }
             
                     
@@ -1957,7 +1973,7 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
             message:"Enter Correct details"
         })
     }
-    
+           
 })
 //------------------------------------Get All Asset------------------------------------------------------------------//
 app.get('/Assets', (req,res)=>{
@@ -1965,15 +1981,15 @@ app.get('/Assets', (req,res)=>{
     name=req.query.itemName
     typeMedia=req.query.typeMedia;
     if (!name){
-        name="%"
+        name="%"  
     }
-    if (limit){
-        limit=parseInt(limit)
-        console.log(limit)
-    }else{
-        limit=10;
-    }  
-    getAllItems(limit, name)
+    // if (limit){
+    //     limit=parseInt(limit)
+    //     console.log(limit)
+    // }else{
+    //     limit=10;
+    // }  
+    getAllItems(name)
     .then(data=>{
         if (data.length>0){
             let items = JSON.parse(JSON.stringify(data[0]));
@@ -1989,9 +2005,13 @@ app.get('/Assets', (req,res)=>{
                 var csv =stringify(data[0], { header: true })           
                 .pipe(res);         
                 itemsCsv=csv
+                // console.log(res)
                 res.status(200) 
-                // res.send(
-                //      res 
+                // res.json({  
+                //     success:true,
+                    
+                // }
+                   
                 // ) 
             }else{          
                 res.status(200),
