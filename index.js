@@ -11,7 +11,7 @@ const fs = require('fs');
 // package use to transform json to csv string
 const stringify = require('csv-stringify');
 
-// require paparse
+// require paparse 
 const papaparse= require("papaparse")
 // app.use(bodyparser.urlencoded({
 //   extended: true
@@ -129,8 +129,8 @@ const mysqlConnection = db;
                                         service: 'gmail',
                                         auth: {
                                             // should be replaced with real sender's account
-                                            user: 'oremei.akande@gmail.com',
-                                            pass: 'oremei@akande'
+                                            user: 'Titanskayar@gmail.com',
+                                            pass: 'Prov!dence19'
                                         }
                                     });
                                     let mailOptions = {
@@ -461,6 +461,8 @@ const mysqlConnection = db;
         console.log(req.body)
         console.log(req.body.username)
         id = req.body.staff_id;
+        console.log("--------------------------------------")
+        console.log(id)
         username=req.body.username;
         firstname= req.body.firstname;
         lastname= req.body.lastname;
@@ -472,7 +474,7 @@ const mysqlConnection = db;
         //handle images
         random = Math.random().toString(36).slice(-8);
            if (!req.files){
-           Image = ""
+        //    Image = ""
            }
             else{
                 file = req.files.Image;
@@ -482,7 +484,7 @@ const mysqlConnection = db;
                 console.log(Image)
             }
         if (firstname && lastname && email && phonenumber && role && id && username){
-            mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=?, Image=? where Staff_Id=?', [firstname, lastname, email, phonenumber, Image, id], (err)=>{
+            mysqlConnection.query('update user SET FirstName=?, LastName=?, Email=?, PhoneNumber=? where Staff_Id=?', [firstname, lastname, email, phonenumber, id], (err)=>{
                 // ----------------------------Email update on credential----------------------------
                 if (!err){
                     mysqlConnection.query("update credential SET Email=? where UserName=?",[email,username], (err)=>{
@@ -547,18 +549,18 @@ const mysqlConnection = db;
             })
         }
     })
-// ======================Update User Image=======================================================================================
-    app.post('/Users/Image', passport.authenticate('jwt', {session:false}), (req,res)=>{
-        id=req.body.staffId
+// ======================Update User Image mobile=======================================================================================
+    app.put('/Users/Image/:staffId', passport.authenticate('jwt', {session:false}), (req,res)=>{
+        id=req.params.staffId
         random = Math.random().toString(36).slice(-8);
         if (!req.files){
-            Image = ""
+            Image = "" 
             }
             else{
                 file = req.files.Image;
-                Image = random+req.files.Image.name;
-                file.mv('public/images/users/'+Image);
-                console.log("Image")
+                Image = random+req.files.Image.name;  
+                file.mv('public/images/users/'+Image); 
+                console.log("Image") 
                 console.log(Image)
             }
         
@@ -583,6 +585,43 @@ const mysqlConnection = db;
         // }else{
         // }
     })
+// ======================Update User Image web=======================================================================================
+app.put('/Users/Image', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id=req.body.staffId
+    random = Math.random().toString(36).slice(-8);
+    if (!req.files){
+        Image = ""
+        }
+        else{
+            file = req.files.Image;
+            Image = random+req.files.Image.name;
+            file.mv('public/images/users/'+Image);
+            console.log("Image")
+            console.log(Image)
+        }
+    
+    // if (file){
+        mysqlConnection.query('update user SET Image=? where Staff_Id=?', [Image,id], (err)=>{
+            if (!err){
+                console.log("Image  updated");
+                res.status(200)
+                res.json({
+                    success:true,
+                    message:'Image added to staff'
+                })
+            }else{
+                console.log(err)
+                res.status(400)
+                res.json({
+                    success:false,
+                    message:'Image not added to staff'
+                })
+            }
+        })
+    // }else{
+    // }
+})
+
     //-----------------------------------------------  HANDLING ROLES ------------------------------------------------------//
     app.post('/roles', passport.authenticate('jwt', {session:false}), (req,res)=>{
         staffId= req.body.staff_id;
@@ -660,8 +699,8 @@ const mysqlConnection = db;
                                         service: 'gmail',
                                         auth: {
                                             // should be replaced with real sender's account
-                                            user: 'oremei.akande@gmail.com',
-                                            pass: 'oremei@akande'
+                                            user: 'Titanskayar@gmail.com',
+                                            pass: 'Prov!dence19'
                                         }
                                     });
                                     let mailOptions = {
@@ -745,8 +784,8 @@ const mysqlConnection = db;
                                                         service: 'gmail',
                                                         auth: {
                                                             // should be replaced with real sender's account
-                                                            user: 'oremei.akande@gmail.com',
-                                                            pass: 'oremei@akande'
+                                                            user: 'Titanskayar@gmail.com',
+                                                            pass: 'Prov!dence19'
                                                         }
                                                     });
                                                     let mailOptions = {
@@ -867,9 +906,9 @@ const mysqlConnection = db;
 //----------------------------------------------------------------------------user end----------------------------
 //------------------------------------------------------------port handler----------------------------------------------------------------------//
 
-const port = process.env.PORT || 8083    
+const port = process.env.PORT || 5000    
 
-app.listen(port, ()=> console.log(`listening on port ${port}...`));
+app.listen(port, ()=> console.log(`listening on port ${port}...`));   
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------//
@@ -1097,11 +1136,11 @@ async function getEventById(id){
       } catch (err) {
           
         console.log(err)
-        return err
+        return err 
         } 
 }
 
-async function getItemById(id, is_Assigned){
+async function getItemById(id, is_Assigned){ 
     const mysql2= require('mysql2/promise');
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     const lot=[]
@@ -1385,7 +1424,7 @@ async function assignEvent(event, username){
     const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         event.assigned_to=username
-        event.parent_id=event.lastId 
+        event.parent_id=event.lastId
         event.type='assign'
         event.is_Assigned=1
         eveCreate= await createEvent(event)
@@ -1724,52 +1763,52 @@ async function processCategoryArray(category,id) {
 }
 async function delayedCategory(item,id){
     await delay()
-        getCatByName= await getCategoryByName(item)
-         
-            if (getCatByName[0].length>0){
+        await getCategoryByName(item)
+        .then(data=>{
+            if (data[0].length>0){
                 console.log("Category exists")
-                cat_id= JSON.stringify(getCatByName[0][0].Category_Id)
-                getCatItemByCatId= await getCatItemByCatIdItemId(cat_id,id)
-                
-                    if (getCatItemByCatId[0].length>0){
+                cat_id= JSON.stringify(data[0][0].Category_Id)
+                getCatItemByCatIdItemId(cat_id,id)
+                .then(data=>{
+                    if (data[0].length>0){
                         console.log("category Item EXits")
                     }else{
-                        createItemCategory= await createItem_Category(event.item_id, cat_id)
-                        
-                            if (createItemCategory.insertId){
-                                console.log("category_item created")
-                            }else{
-                                console.log("category_item not created") 
-                            }
-                        
-                    }
-                
-                
-
-            }else{
-                const createCat= await createCategory(item)
-                
-                    if (createCat.insertId){
-                        cat_id=createCat.insertId
-                        console.log('we herererrer')
-                        createItemCategory= await createItem_Category(event.item_id, cat_id)
-                        
-                            if (createItemCategory.insertId){
+                        createItem_Category(event.item_id, cat_id)
+                        .then(data=>{
+                            if (data.insertId){
                                 console.log("category_item created")
                             }else{
                                 console.log("category_item not created")
                             }
+                        });
+                    }
+                })
+                
+
+            }else{
+                createCategory(item)
+                .then(data=>{
+                    if (data.insertId){
+                        cat_id=data.insertId
+                        console.log('we herererrer')
+                        createItem_Category(event.item_id, cat_id)
+                        .then(data=>{
+                            if (data.insertId){
+                                console.log("category_item created")
+                            }else{
+                                console.log("category_item not created")
+                            }
+                        });
                         
-                        
-                        item_cat.push(createCat.insertId)   
+                        item_cat.push(data.insertId)
                         console.log("category created")
                         console.log(item_cat)
                     }else{
                         console.log("category not created")
                     }
-                
+                });
             }
-        
+        })
     
 }
 async function assetsLog(item){
@@ -1855,13 +1894,13 @@ async function assetsLog(item){
             console.log("item already exists")
             const id= JSON.stringify(name[0][0].Item_Id)
             event.item_id= id;
-            console.log('id with which the item exists is ' + id)
+            console.log('id with which the item exits is ' + id)
+            // console.log(event.item_id)
             //add category and insert category_item
             cat= await processCategoryArray(category,id)
             if (cat=="success"){
                 console.log('Category created')
             }
-            // console.log(event.item_id)
             eventCreate= await createEvent(event)
             if (eventCreate.insertId){
                 lotId=data.insertId
@@ -1870,7 +1909,7 @@ async function assetsLog(item){
                     if (SN=="success"){
                         console.log("created successfully")
                     }else{
-                        console.log("Not created successfully: SERIALNUMBERS") 
+                        console.log("Not created successfully: SERIALNUMBERS")
                     }
                     console.log("item created")
                     }
@@ -1911,7 +1950,7 @@ async function assetsLog(item){
             }
         }                 
     }else{
-       console.log("correct values should be entered")
+       console.log("correct values should be entered") 
     }
 }
 async function parseDataHere(content){
@@ -1973,7 +2012,7 @@ app.get('/Assets/:id', passport.authenticate('jwt', {session:false}), (req,res)=
             message:"Enter Correct details"
         })
     }
-           
+    
 })
 //------------------------------------Get All Asset------------------------------------------------------------------//
 app.get('/Assets', (req,res)=>{
@@ -1981,7 +2020,7 @@ app.get('/Assets', (req,res)=>{
     name=req.query.itemName
     typeMedia=req.query.typeMedia;
     if (!name){
-        name="%"  
+        name="%"
     }
     // if (limit){
     //     limit=parseInt(limit)
@@ -2005,13 +2044,9 @@ app.get('/Assets', (req,res)=>{
                 var csv =stringify(data[0], { header: true })           
                 .pipe(res);         
                 itemsCsv=csv
-                // console.log(res)
                 res.status(200) 
-                // res.json({  
-                //     success:true,
-                    
-                // }
-                   
+                // res.send(
+                //      res 
                 // ) 
             }else{          
                 res.status(200),
@@ -2546,6 +2581,7 @@ app.put('/category', passport.authenticate('jwt', {session:false}), (req,res)=>{
 //----------------------------------REQUEST------------------------------------------------------------------------------//
 //=============================================post requests====================================================
 app.post('/request', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    console.log(req.body)
     requested_by=req.body.staffUsername
     comment=req.body.comment
     if (!comment){
@@ -2826,8 +2862,8 @@ app.get('/notification/count', passport.authenticate('jwt', {session:false}), (r
   
 })
 //================================================update notification when read and who read it-================
-app.put('/notification/:notificationId', passport.authenticate('jwt', {session:false}), (req,res)=>{
-    id= req.params.notificationId
+app.put('/notification', passport.authenticate('jwt', {session:false}), (req,res)=>{
+    id= req.body.notificationId
     staffUsername=req.body.staffUsername
     now=new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0]
     console.log(id)
@@ -2836,7 +2872,7 @@ app.put('/notification/:notificationId', passport.authenticate('jwt', {session:f
             console.log(results)
             if (results.length > 0){
                 isRead=results[0].is_read
-                newIsRead=!isRead
+                newIsRead=!isRead    
                 if (isRead=='0'){
                     mysqlConnection.query('Update notifications SET is_read=?, read_by=?, date_read=? where id=?', [newIsRead, staffUsername, now, id], (err)=>{
                         if (!err){
@@ -2970,7 +3006,7 @@ app.get('/requestCount', (req,res)=>{
     status=req.query.status
     if (!status){
         status='%'
-    }else{ 
+    }else{  
         status= status
     }
     mysqlConnection.query('SELECT COUNT(id) AS NumberOfRequest FROM request where status like ?',[status], function(error, results){
