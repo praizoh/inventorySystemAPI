@@ -1,7 +1,5 @@
 const express = require('express');
 const mysql = require('mysql');
-// const mysql2= require('mysql2/promise');
-// const connection = mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
 const app = express();
 const bodyparser = require('body-parser');
 const passport = require('passport')
@@ -41,7 +39,7 @@ const db = mysql.createConnection({
 });
 const secret = "yoursecret";
 module.exports= { secret };
-
+const connection = require('./Database/db.sql2')
 //Connect
 db.connect((err) => {
     if(err){
@@ -50,6 +48,7 @@ db.connect((err) => {
     console.log('MySql Connected...');
 });
 const mysqlConnection = db;
+   
 //----------------------------------------------------REGISTER NEW USER---------------------------------------------//
     app.post('/User', (req,res)=>{
         firstname= req.body.firstname;
@@ -915,8 +914,6 @@ app.listen(port, ()=> console.log(`listening on port ${port}...`));
 //------------------------------------------------------------------------------------------------------------------------------------------------
 // ASSETS MANAGEMENT-----------------------------------------------------------------------------------------------------------------------------
 async function createItem(item){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{ 
         const result = await connection.execute("insert into item (Item_Name, Item_Desc) values ('"+item.itemName+"', '"+item.itemDesc+"')")
         console.log("item inserted with")
@@ -932,9 +929,7 @@ async function createItem(item){
 }
 
 async function createCategory(category){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{ 
+   try{ 
         const result = await connection.execute("insert into category (Category_Name) values ('"+category+"')")
         console.log("category inserted")
         console.log(result[0].insertId)
@@ -948,8 +943,6 @@ async function createCategory(category){
     
 }
 async function createItem_Category(item_id, category_id){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{ 
         const result = await connection.execute("insert into item_category (item_id, category_id) values ('"+item_id+"','"+category_id+"')")
         console.log("category_item inserted")
@@ -964,8 +957,6 @@ async function createItem_Category(item_id, category_id){
     
 }
 async function getCategoryByName(name){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from category where Category_Name=?', [name]);
         console.log(result[0])
@@ -979,8 +970,6 @@ async function getCategoryByName(name){
     } 
 }
 async function getCategoryByItemId(id){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item_category join category on item_category.Category_Id=category.Category_Id where item_category.Item_Id=?', [id]);
         console.log(result)
@@ -994,9 +983,7 @@ async function getCategoryByItemId(id){
     } 
 }
 async function getCatItemByCatIdItemId(catId,itemId){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try {
+   try {
         const result =await connection.execute('select * from item_category where item_category.Category_Id=? and item_category.Item_Id=?', [catId,itemId]);
         console.log("-----------------------------------------------------------------------------------------------")
         console.log(result)
@@ -1010,9 +997,7 @@ async function getCatItemByCatIdItemId(catId,itemId){
     } 
 }
 async function getAllCategory(){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try {
+   try {
         const result =await connection.execute('select * from category');
         console.log(result[0])
         let data= result
@@ -1029,10 +1014,7 @@ async function createEvent(event){
     if (!event.requestId){
         event.requestId=0
     }
-    
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{
+   try{
         if (event.is_Assigned){
             const result= await connection.execute("insert into events(item_id, quantity, type, location, received_by, brought_by, assigned_to, parent_id, Status, subDescription, Comment, Category, requestId,is_Assigned) values ('"+event.item_id+"', '"+event.quantity+"', '"+event.type+"', '"+event.location+"', '"+event.received_by+"', '"+event.brought_by+"', '"+event.assigned_to+"', '"+event.parent_id+"', '"+event.Status+"', '"+event.subDescription+"', '"+event.Comment +"', '"+event.Category +"', '"+event.requestId +"', '"+event.is_Assigned +"')")
             console.log(result)
@@ -1053,8 +1035,6 @@ async function createEvent(event){
 }
 
 async function staffAsset(staff_name){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from events e, item i where e.assigned_to=? and e.is_Leaf=1 and e.item_id=i.Item_Id', [staff_name]);
         console.log(result[0])
@@ -1068,9 +1048,7 @@ async function staffAsset(staff_name){
     }
 }
 async function updateEvent(id){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{
+  try{
         const result = await connection.execute('update events SET is_leaf=? where id=?',[0,id])
         console.log("update heere")
         console.log(result)
@@ -1081,9 +1059,7 @@ async function updateEvent(id){
     
 }
 async function updateAssetById(itemDesc,itemName,itemId){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{
+   try{
         const result = await connection.execute('update item SET Item_Desc=?, Item_Name=? where Item_Id=?',[itemDesc,itemName, itemId])
         // console.log("update heere")
         // console.log(result)
@@ -1095,9 +1071,7 @@ async function updateAssetById(itemDesc,itemName,itemId){
     
 }
 async function updateEventStatus(id,status){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
-    try{
+   try{
         const result = await connection.execute('update events SET Status=? where id=?',[status,id])
         console.log("update heere")
         console.log(result)
@@ -1109,8 +1083,6 @@ async function updateEventStatus(id,status){
 }
 
 async function updateRequest(id,status, responded_by,qty){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         //const result = await connection.execute('update events SET is_leaf=? where requestId=?',[0,id])
         now=new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0]
@@ -1126,8 +1098,6 @@ async function updateRequest(id,status, responded_by,qty){
 }
 
 async function getEventById(id){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from events where id=?', [id]);
         let data= result
@@ -1141,8 +1111,6 @@ async function getEventById(id){
 }
 
 async function getItemById(id, is_Assigned){ 
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     const lot=[]
     try {
         const result =await connection.execute('select * from events e, item t  where  e.assigned_to Like ? and e.is_leaf=1 and e.item_id=t.item_id and e.item_id=?', [is_Assigned,id]);
@@ -1174,8 +1142,6 @@ async function getItemById(id, is_Assigned){
 } 
 
 async function getItemByName(itemName){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item where item_Name=?', [itemName]);
         //console.log(JSON.stringify(result[0][0].Item_Id))
@@ -1192,8 +1158,6 @@ async function getItemByName(itemName){
 }
 
 async function getAllItems(name){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT item.item_id,item.item_Name,item.item_Desc, SUM(events.quantity) AS Quantity FROM item INNER JOIN events ON item.item_id = events.item_id where events.is_leaf=1 and item.Item_Name like "%' + name + '%" GROUP BY item.item_id order by item.Date_Created DESC',);
         let data= result
@@ -1233,8 +1197,6 @@ async function processUpdateSerialNumberArray(array,id,eventId) {
     return data
 }
 async function delayedUpdateSN(item,id, eventId){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
        
         
@@ -1249,8 +1211,6 @@ async function delayedUpdateSN(item,id, eventId){
     
 }
 async function UpdateSN(newId, eventId){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
        
         
@@ -1268,8 +1228,6 @@ async function UpdateSN(newId, eventId){
 async function updateSerialNumber(arr,id, eventId){
     id=id
     eventId=eventId
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         procUpdate= await processUpdateSerialNumberArray(arr,id,eventId)
         if (procUpdate=='success'){
@@ -1286,8 +1244,6 @@ async function updateSerialNumber(arr,id, eventId){
 
 //updates the lotId to a new lotId given the old and new eventId without the serial  numbers
 async function updateLotIdforSerialNumbers(id, eventId){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         console.log('serial')
         console.log(arr)
@@ -1308,8 +1264,6 @@ async function updateLotIdforSerialNumbers(id, eventId){
 }
 
 async function splitEvent(event){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         const data=[]
         let  leftQuantity = parseInt(event.eventQty)-parseInt(event.assQty);
@@ -1420,8 +1374,6 @@ async function splitEvent(event){
 
 }
 async function assignEvent(event, username){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         event.assigned_to=username
         event.parent_id=event.lastId
@@ -1459,8 +1411,6 @@ async function assignEvent(event, username){
 }
 
 async function getRequestById(id){ 
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from request r, item_request i, item t  where r.id=i.request_id and i.item_id=t.Item_Id and r.id=?', [id]);
         // select * from request r, item_request i, item t where r.id=i.request_id and i.item_id=t.Item_Id and r.id=16
@@ -1475,8 +1425,6 @@ async function getRequestById(id){
     } 
 }
 async function getAllRequest(limit){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT * from request limit ?', [limit]);
         let data= result
@@ -1489,8 +1437,6 @@ async function getAllRequest(limit){
         } 
 }
 async function createRequest(username,comment){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         const result= await connection.execute("insert into request(requested_by,comment) values ('"+username+"', '"+comment+"')");
                 data=result[0]
@@ -1504,8 +1450,6 @@ async function createRequest(username,comment){
     
 }   
 async function createitemRequest(requestId,itemId,quantity){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         const result= await connection.execute("insert into item_request(item_id,qty_requested,request_id) values ('"+itemId+"', '"+quantity+"', '"+requestId+"')");
         
@@ -1521,8 +1465,6 @@ async function createitemRequest(requestId,itemId,quantity){
     
 }   
 async function createLotSerialNumbers(lotId, serialNum){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{
         const result= await connection.execute("insert into item_serialn(lotId,serialNumber) values ('"+lotId+"', '"+serialNum+"')");
         
@@ -1538,8 +1480,6 @@ async function createLotSerialNumbers(lotId, serialNum){
     
 }   
 async function getlotSerialNumber(id){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('select * from item_serialn where lotId=?', [id]);
         let data= result
@@ -1656,8 +1596,6 @@ async function processArray(array,username, requestId, requestStatus, assLocatio
 }
 
 async function createNotification(subject, body, sender, link_type, link_type_id,to){
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try{ 
         const result = await connection.execute("insert into notifications (subject, body, sender, link_type, link_type_id, recipient) values ('"+subject+"','"+body+"','"+sender+"','"+link_type+"','"+link_type_id+"','"+to+"')")
         console.log("notification inserted")
@@ -1673,8 +1611,6 @@ async function createNotification(subject, body, sender, link_type, link_type_id
 }
 async function getAllNotification(limit,is_Read,to){
     console.log(is_Read)   
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT * from notifications where is_read like ? and recipient like ? order by date_sent DESC limit ?', [is_Read,to,limit]);
         let data= result 
@@ -1688,8 +1624,6 @@ async function getAllNotification(limit,is_Read,to){
 }
 async function getAllNotificationCount(is_Read,to){
     console.log(is_Read)   
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT COUNT(*) AS NumberOfNotifications from notifications where is_read like ? and recipient like ? order by date_sent DESC', [is_Read,to]);
         let data= result
@@ -1703,9 +1637,6 @@ async function getAllNotificationCount(is_Read,to){
 }
 // SELECT COUNT(requested_by) AS NumberOfRequest FROM request where requested_by=?'
 async function getNotificationById(id){
-     
-    const mysql2= require('mysql2/promise');
-    const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         const result =await connection.execute('SELECT * from notifications where id=?', [id]);
         let data= result
@@ -1954,9 +1885,6 @@ async function assetsLog(item){
     }
 }
 async function parseDataHere(content){
-    // console.log(is_Read)   
-    // const mysql2= require('mysql2/promise');
-    // const connection = await mysql2.createConnection({host:'localhost', user: 'root', database: 'inventory_management_system'});
     try {
         parseContent = await   papaparse.parse(content,  {   
                                 header:true, 
