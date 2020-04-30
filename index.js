@@ -48,7 +48,9 @@ db.connect((err) => {
     console.log('MySql Connected...');
 });
 const mysqlConnection = db;
-   
+app.get('/', (req,res)=>{
+    res.status(200).send('You are welcome')
+})
 //----------------------------------------------------REGISTER NEW USER---------------------------------------------//
     app.post('/User', (req,res)=>{
         firstname= req.body.firstname;
